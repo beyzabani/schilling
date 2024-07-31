@@ -1,0 +1,329 @@
+---
+title: "H7-Sample 2"
+author: "Beyza Bani"
+date: "2024-07-17"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+# Load necessary libraries ------------------------------------------------
+library(ggplot2)
+library(readxl)
+library(dplyr)
+library(tidyr)
+library(scales)
+library(gridExtra) 
+library(knitr)
+library(kableExtra)
+library(broom)
+library(knitr)
+library(stargazer)
+library(rio)
+#install.packages("rio")
+# Read the data -----------------------------------------------------------
+df <- read_excel("C:/Users/User/Desktop/osterloh/schilling/data.xlsx")
+```
+
+
+## H7: Sector-Specific Challenges
+
+
+Hypothesis: Women in certain sectors (e.g., tech, finance) have shorter tenures in executive positions compared to other sectors due to sector-specific challenges.  
+
+Rationale: The tech and finance sectors, among others, are often highlighted for their competitive, high-pressure environments, which may pose unique challenges to women. These challenges can include, but are not limited to, gender bias, underrepresentation, and a lack of supportive networks or mentors. Such environments can intensify the feeling of isolation and hinder the progression of women to leadership positions or their desire to remain long-term in such positions. By examining the tenure of women executives across different sectors, along with the gender of executives, this hypothesis aims to uncover whether certain industries have systemic issues that affect the retention of women in high-level roles.
+Connection to sampling:  
+
+With the sampling of women and the second sampling of 72 men, we could test this hypothesis.  
+
+Variables needed to test H7:  
+
+-	Industry sector,  
+-	Gender of executives,  
+-	Tenure in positions.  
+
+
+```{r, echo=FALSE}
+# cleaning ----------------------------------------------------------------
+
+df <- df[-1, ]%>% 
+  select(Austrittsjahr, Jahrgang, Gender, Sample, Stellenantritt, Nationality, Nationality_co, Branche) %>%
+  mutate_all(as.character) %>%
+  mutate_all(~ recode(., "NA" = NA_character_, "N/A" = NA_character_))
+
+#colSums(is.na(df))
+
+
+# New variables -----------------------------------------------------------
+df <- df %>%
+  drop_na(Jahrgang, Stellenantritt) %>%
+  mutate(age_start = as.numeric(Stellenantritt) - as.numeric(Jahrgang))%>% 
+  mutate(age_exit = as.numeric(Austrittsjahr) - as.numeric(Jahrgang)) %>% 
+  mutate(tenure = as.numeric(Austrittsjahr) - as.numeric(Stellenantritt)) %>% 
+  mutate(current_age = 2023 - as.numeric(Jahrgang))
+#colSums(is.na(df))
+```
+
+## Sample 1
+
+```{r, echo=FALSE}
+# SAMPLE 1 ---------------------------------------------------------------
+dfs1 <- df %>%
+  filter(Sample == 0 | Sample == 2) %>%
+  drop_na(Nationality) %>%
+   mutate(language = case_when(
+    Nationality %in% c("Schweiz", "Osterreich", "Deutschland", 
+                       "China / Deutschland", "Schweiz / Brazil") ~ "German",
+    Nationality %in% c("Frankreich", "Belgien") ~ "French",
+    Nationality %in% c("USA", "Grossbritannien", "Australien", "Irland", "Kanada", 
+                        "Singapur", "Philippinen / USA") ~ "English",
+   TRUE ~ "Other" )) %>% 
+    mutate(Nationality_co = factor(case_when(
+    Nationality == "Schweiz" ~ 0,
+    Nationality %in% c("Deutschland", "Frankreich", "Italien", "Osterreich") ~ 1,
+    TRUE ~ 2), 
+    levels = c(0, 1, 2), labels = c("Schweiz", "Neighbours", "Other"))) %>%
+ mutate(Branche = case_when(
+      Branche %in% c("Real Estate") ~ "Business Services",
+      Branche %in% c("Wholesale/Commodities") ~ "Retail/Consumer Goods",
+      TRUE ~ Branche))%>% 
+  mutate(sector_leaky = case_when(
+    Branche == "Banking" ~ -26,
+    Branche == "Media/ICT" ~ -13,
+    Branche == "Energy" ~ -3,
+    Branche == "Insurance" ~ -35 ,
+    Branche == "Manufacturing industry" ~ -20,
+    Branche == "Life Sciences" ~ -22,
+    Branche == "Retail/Consumer Goods" ~ -25,
+    Branche == "Transport/Logistics/Tourism" ~ +2,
+    Branche == "Business Services" ~ -33),
+  #  mean_sector_leaky = mean(c(-26, -13, -3, -35, -20, -22, -25, 2, -33), na.rm = TRUE),
+    sector_leaky_group = case_when(
+      sector_leaky <= -25 ~ "High Leak",
+      sector_leaky > -25 ~ "Low Leak"))%>% 
+#  mutate(sector_middle = case_when(
+ #   Branche == "Banking" ~ 25,
+  #  Branche == "Media/ICT" ~ 21,
+   # Branche == "Energy" ~ 39,
+  #  Branche == "Insurance" ~ 31,
+   # Branche == "Manufacturing industry" ~ 18,
+   # Branche == "Life Sciences" ~ 33,
+  #  Branche == "Retail/Consumer Goods" ~ 38,
+   # Branche == "Transport/Logistics/Tourism" ~ 11,
+  #  Branche == "Business Services" ~ 35),
+ # sector_middle_group = case_when(
+  #    sector_middle > 28 ~ "High",
+   #   sector_middle <= 28 ~ "Low")) %>% 
+#  mutate(sector_workforce = case_when(
+ #   Branche == "Banking" ~ 41,
+  #  Branche == "Media/ICT" ~ 29,
+   # Branche == "Energy" ~ 22,
+  #  Branche == "Insurance" ~ 49,
+   # Branche == "Manufacturing industry" ~ 29,
+  #  Branche == "Life Sciences" ~ 42,
+   # Branche == "Retail/Consumer Goods" ~ 46,
+  #  Branche == "Transport/Logistics/Tourism" ~ 19,
+   # Branche == "Business Services" ~ 56),
+ # sector_workforce_group = case_when(
+  #    sector_workforce > 37 ~ "Higher Representativeness",
+   #   sector_workforce <= 37 ~ "Lower Representativeness")) %>% 
+  mutate(Gender = factor(Gender, levels = c(0, 1), labels = c("Female", "Male"))) %>% 
+  mutate(age_start_group = case_when(
+    age_start >= 28 & age_start <= 44 ~ "younger than 45",
+    age_start >= 45 & age_start <= 54 ~ "45-54 years old",
+    age_start >= 55 & age_start <= 73 ~ "55+ years old",)) %>% 
+  mutate(age_exit_group = case_when(
+    age_exit >= 28 & age_exit <= 44 ~ "younger than 45",
+    age_exit >= 45 & age_exit <= 54 ~ "45-54 years old",
+    age_exit >= 55 & age_exit <= 73 ~ "55+ years old",)) %>% 
+  mutate(tenure_group = case_when(
+   tenure >= 1 & tenure <= 3 ~ "1-3 years",
+    tenure >= 4 & tenure <= 6 ~ "4-6 years",
+    tenure >= 7 & tenure <= 9 ~ "7-9 years",
+    tenure >= 10 & tenure <= 12 ~ "10-12 years",
+    tenure >= 13 & tenure <= 27 ~ "13+ years"))
+
+#export(dfs1, "h7.xlsx")
+```
+
+### Summarize Sample 2 by Gender
+
+```{r, echo=FALSE}
+
+# Summarize data by gender and Branche, including the count of observations
+summary_stats1 <- dfs1 %>%
+  group_by(Gender, Branche) %>%
+  summarize(
+    count = n(),
+    mean_tenure = round(mean(tenure, na.rm = TRUE), 1),
+    median_tenure = round(median(tenure, na.rm = TRUE), 1),
+    sd_tenure = round(sd(tenure, na.rm = TRUE), 1)
+  )
+
+# Display the summary statistics as a table with counts
+summary_stats1 %>%
+  kable(
+    caption = "Summary Statistics of Sectors by Gender",
+    col.names = c("Gender", "Sector", "Count", "Mean Tenure", "Median Tenure", "SD Tenure"),
+    align = "c"
+  ) %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed", "responsive"),
+    full_width = FALSE,
+    position = "center"
+  )
+
+# Create bar plot for mean tenure by gender and Branche
+plot_sum <- ggplot(summary_stats1, aes(x = Branche, y = mean_tenure, fill = Gender)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Mean Tenure by Gender and Sector",
+       x = "Sector",
+       y = "Mean Tenure") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+plot_sum
+
+
+```
+
+The mean tenure for males is consistently higher across all sectors compared to females. This highlights a potential systemic issue where females might face challenges that affect their length of stay in executive roles.
+
+```{r, echo=FALSE}
+
+# Count of genders per branch
+count_data <- dfs1 %>%
+  group_by(Branche, Gender) %>%
+  summarise(Count = n()) %>%
+  ungroup()
+
+# Calculate percentages
+total_counts <- count_data %>%
+  group_by(Branche) %>%
+  summarise(Total = sum(Count))
+
+count_data <- count_data %>%
+  left_join(total_counts, by = "Branche") %>%
+  mutate(Percentage = (Count / Total) * 100)
+
+# Plot
+ggplot(count_data, aes(x = Branche, y = Count, fill = Gender)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_text(aes(label = paste0(round(Percentage, 1), "%")), 
+            position = position_dodge(width = 0.5), 
+            vjust = -0.5) +
+  labs(title = "Gender Distribution by Branche", 
+       x = "Branche", 
+       y = "Count") +
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
+
+
+count3 <- dfs1 %>% 
+   ggplot(aes(x = Gender, y = ..count.., fill = Nationality_co, label = ..count..)) +
+   geom_bar(stat = "count", position = position_dodge(width = 0.9)) +
+   geom_text(stat = "count", position = position_dodge(width = 0.9), vjust = -0.5, size = 3) +
+   labs(title = "Figure 1.3 Count Distribution of Gender, Nationality, and Sector (Sample1)",
+        x = "Gender",
+        y = "Nationality (Count)",
+        fill = "Nationality") +
+   theme_minimal() +
+   scale_fill_brewer(palette = "Dark2") +
+   facet_wrap(~ sector_leaky_group)
+count3
+
+
+dfs1 <- dfs1 %>% 
+  mutate(age_start_group = factor(age_start_group, 
+                                   levels = c("younger than 45", "45-54 years old", "55+ years old")),
+         tenure_group = factor(tenure_group, ordered = TRUE))
+
+# Create the plot
+count4 <- dfs1 %>%
+  ggplot(aes(x = Gender, fill = Branche)) +
+  geom_bar(position = position_dodge(width = 0.9)) +
+  geom_text(stat = "count", aes(label = ..count..), position = position_dodge(width = 0.9), vjust = -0.5, size = 3) +
+  labs(title = "Figure 1.3 Count Distribution of Age Group, Tenure, Gender, and Sector",
+       x = "Gender",
+       y = "Count",
+       fill = "Sector") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Dark2") +
+  facet_grid(tenure_group ~ sector_middle_group)
+table(dfs1$sector_leaky_group)
+```
+
+#### Leaky Grouping
+
+```{r, echo=FALSE}
+
+#### Tenure, Sector, Gender by count - leaky
+
+count6 <- dfs1 %>% mutate(tenure_group = factor(tenure_group, 
+                levels = c("1-3 years", "4-6 years", "7-9 years", "10-12 years", "13+ years"))) %>% 
+   ggplot(aes(x = Gender, y = ..count.., fill = tenure_group, label = ..count..)) +
+   geom_bar(stat = "count", position = position_dodge(width = 0.9)) +
+   geom_text(stat = "count", position = position_dodge(width = 0.9), vjust = -0.5, size = 3) +
+   labs(title = "Figure 1.3 Count Distribution of Gender, Tenure, and Sector (Sample1)",
+        x = "Gender",
+        y = "Branche (Count)",
+        fill = "Tenure") +
+   theme_minimal() +
+   scale_fill_brewer(palette = "Dark2") +
+   facet_wrap(~ sector_leaky_group)
+count6
+
+
+count7 <- dfs1 %>% 
+   mutate(age_start_group = factor(age_start_group, 
+                                   levels = c("younger than 45", "45-54 years old", "55+ years old"))) %>% 
+   ggplot(aes(x = Gender, y = ..count.., fill = age_start_group, label = ..count..)) +
+   geom_bar(stat = "count", position = position_dodge(width = 0.9)) +
+   geom_text(stat = "count", position = position_dodge(width = 0.9), vjust = -0.5, size = 3) +
+   labs(title = "Figure 1.3 Count Distribution of Gender, Age at Start, and Sector (Sample1)",
+        x = "Gender",
+        y = "Age group (Count)",
+        fill = "Age Group") +
+   theme_minimal() +
+   scale_fill_brewer(palette = "Dark2") +
+   facet_wrap(~ sector_leaky_group)
+count7
+
+
+# Ensure your dataset contains the necessary columns and levels
+dfs1 <- dfs1 %>% 
+  mutate(age_start_group = factor(age_start_group, 
+                                   levels = c("younger than 45", "45-54 years old", "55+ years old")),
+         tenure_group = factor(tenure_group, ordered = TRUE))
+
+# Create the plot
+count8 <- dfs1 %>%
+  ggplot(aes(x = Gender, fill = Branche)) +
+  geom_bar(position = position_dodge(width = 0.9)) +
+  geom_text(stat = "count", aes(label = ..count..), position = position_dodge(width = 0.9), vjust = -0.5, size = 3) +
+  labs(title = "Figure 1.3 Count Distribution of Age Group, Tenure, Gender, and Sector",
+       x = "Gender",
+       y = "Count",
+       fill = "Sector") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Dark2") +
+  facet_grid(tenure_group ~ sector_leaky_group)
+#count8
+```
+### Regression Analysis
+
+```{r, echo=FALSE}
+# Regression Analysis -----------------------------------------------------
+
+model_leaky <- lm(tenure ~ Gender + sector_leaky_group, data = dfs1)
+summary(model_leaky)
+
+#model_sector_workforce <- lm(tenure ~ Gender + sector_workforce_group, data = dfs1)
+#summary(model_sector_workforce)
+
+model <- lm(tenure  ~ Gender + sector_leaky_group +Nationality_co , data = dfs1)
+model
+```

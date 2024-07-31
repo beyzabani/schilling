@@ -1,0 +1,245 @@
+---
+title: "H5- Sample 2"
+author: "Beyza Bani"
+date: "2024-05-17"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+# Load necessary libraries ------------------------------------------------
+library(ggplot2)
+library(readxl)
+library(dplyr)
+library(tidyr)
+library(scales)
+library(gridExtra) 
+library(knitr)
+library(kableExtra)
+library(broom)
+library(knitr)
+library(stargazer)
+
+# Read the data -----------------------------------------------------------
+df <- read_excel("C:/Users/User/Desktop/osterloh/schilling/data.xlsx")
+```
+
+
+## H5: Lower age of women compared to men
+
+Hypothesis: Women tend to be younger and thus more inexperienced when they enter top management positions, which results in shorter tenure compared to men. 
+
+Rationale: The demographic characteristics of age may influence women’s career paths or personal life choices, leading to earlier departures from high-level positions. To test the hypothesis, it is important to compare men and women of the same or at least similar age. 
+
+Connection to sampling: To test this, it is important to test the hypothesis on men and women of the same or at least similar age (sampling of women and second sampling of 72 men). Obviously, women who are younger than their male counterparts will likely have spent less time in the respective company.
+
+Variables needed to test H5
+o	Tenure of men and women
+o	Year of birth men and women
+o	“Stellenantritt” men and women
+
+```{r echo=FALSE}
+# cleaning ----------------------------------------------------------------
+
+df <- df[-1, ]%>% 
+  select(Austrittsjahr, Jahrgang, Gender, Sample, Stellenantritt, Nationalität, Nationalität_co) %>%
+  mutate_all(as.character) %>%
+  mutate_all(~ recode(., "NA" = NA_character_, "N/A" = NA_character_))
+
+#colSums(is.na(df))
+
+
+# New variables -----------------------------------------------------------
+df <- df %>%
+  drop_na(Jahrgang, Stellenantritt) %>%
+  mutate(age_start = as.numeric(Stellenantritt) - as.numeric(Jahrgang))%>% 
+  mutate(age_exit = as.numeric(Austrittsjahr) - as.numeric(Jahrgang)) %>% 
+  mutate(tenure = as.numeric(Austrittsjahr) - as.numeric(Stellenantritt))
+```
+
+## Sample 2
+
+```{r echo=FALSE}
+dfs2 <- df %>% 
+  filter(Sample== 0 | Sample==2) %>%
+  mutate(Gender = factor(Gender, levels = c(0, 1), labels = c("Female", "Male"))) %>% 
+  mutate(age_start_group = case_when(
+    age_start >= 28 & age_start <= 33 ~ "28-33 years old",
+    age_start >= 34 & age_start <= 39 ~ "34-39 years old",
+    age_start >= 40 & age_start <= 44 ~ "40-44 years old",
+    age_start >= 45 & age_start <= 49 ~ "45-49 years old",
+    age_start >= 50 & age_start <= 54 ~ "50-54 years old",
+    age_start >= 55 & age_start <= 59 ~ "55-59 years old",
+    age_start >= 60 & age_start <= 64 ~ "60-64 years old",)) %>% 
+  mutate(age_exit_group = case_when(
+    age_exit >= 34 & age_exit <= 39 ~ "34-39 years old",
+    age_exit >= 40 & age_exit <= 44 ~ "40-44 years old",
+    age_exit >= 45 & age_exit <= 49 ~ "45-49 years old",
+    age_exit >= 50 & age_exit <= 54 ~ "50-54 years old",
+    age_exit >= 55 & age_exit <= 59 ~ "55-59 years old",
+    age_exit >= 60 & age_exit <= 64 ~ "60-64 years old",
+    age_exit >= 65 & age_exit <= 73 ~ "65+ years old",)) %>% 
+  mutate(tenure_group = case_when(
+    tenure >= 1 & tenure <= 3 ~ "1-3 years",
+    tenure >= 4 & tenure <= 6 ~ "4-6 years",
+    tenure >= 7 & tenure <= 9 ~ "7-9 years",
+    tenure >= 10 & tenure <= 12 ~ "10-12 years",
+    tenure >= 13 & tenure <= 15 ~ "13-15 years",
+    tenure >= 16 & tenure <= 18 ~ "16-18 years",
+    tenure >= 19 ~ "19+ years",))
+```
+
+
+```{r pressure, echo=FALSE}
+
+# Summarize data by gender ------------------------------------------------
+  summary_stats2 <- dfs2 %>%
+  group_by(Gender) %>%
+ summarize(
+    mean_age_start = round(mean(age_start, na.rm = TRUE), 1),
+    mean_age_exit = round(mean(age_exit, na.rm = TRUE), 1),
+    mean_tenure = round(mean(tenure, na.rm = TRUE), 1),
+    sd_age_start = round(sd(age_start, na.rm = TRUE), 1),
+    sd_age_exit = round(sd(age_exit, na.rm = TRUE), 1),
+    sd_tenure = round(sd(tenure, na.rm = TRUE), 1)
+  )
+
+# Display the summary statistics as a table
+summary_stats2 %>%
+  kable(
+    caption = "Summary Statistics by Gender",
+    col.names = c("Gender", "Mean Age Start", "Mean Age Exit", "Mean Tenure", "SD Age Start", "SD Age Exit", "SD Tenure"),
+    align = "c"
+  ) %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed", "responsive"),
+    full_width = FALSE,
+    position = "center"
+  )
+
+# Stacked bar plot for tenure_group, age_start_group, and age_exit_group by gender -------------
+
+# Plot for age_start_group and tenure_group by gender
+plot_age_start_tenure2 <- dfs2 %>%  mutate(tenure_group = factor(tenure_group, levels = c(
+  "1-3 years", "4-6 years", "7-9 years", "10-12 years", "13-15 years", "16-18 years", "19+ years"
+))) %>% 
+  ggplot(aes(x = age_start_group, fill = tenure_group)) +
+  geom_bar(position = "fill", color = "purple") +
+  facet_wrap(~Gender, scales = "free_x") +
+  labs(title = "Distribution of Tenure by Age Start and Gender",
+       x = "Age Group",
+       y = "Tenure (%)",
+       fill = "Tenure Group") +
+  scale_y_continuous(labels = scales::percent_format()) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Plot for age_exit_group and tenure_group by gender
+plot_age_exit_tenure2 <- dfs2 %>% mutate(tenure_group = factor(tenure_group, levels = c(
+  "1-3 years", "4-6 years", "7-9 years", "10-12 years", "13-15 years", "16-18 years", "19+ years"
+))) %>% 
+  ggplot(aes(x = age_exit_group, fill = tenure_group)) +
+  geom_bar(position = "fill", color = "purple") +
+  facet_wrap(~Gender, scales = "free_x") +
+  labs(title = "Distribution of Tenure by Age Exit and Gender",
+       x = "Age Group",
+       y = "Tenure (%)",
+       fill = "Tenure Group") +
+  scale_y_continuous(labels = scales::percent_format()) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+plot_age_start_tenure2
+plot_age_exit_tenure2
+```
+
+### Regression Analysis
+
+```{r echo=FALSE}
+model_start2 <- lm(tenure ~ Gender + age_start, data = dfs2)
+summary(model_start2)
+```
+*Model at Age Start*  
+Model Fit:
+The model explains about 19.17% of the variance in tenure (R-squared = 0.1917). The adjusted R-squared (0.1792) suggests that after adjusting for the number of predictors, approximately 17.92% of the variability in tenure is explained by the model. The F-statistic (15.3) and its associated p-value (1.094e-06) indicate that the overall model is statistically significant.
+
+Intercept: When the starting age (age_start) is zero and the gender is female, the expected tenure is 14.45 years. This estimate is highly significant (p < 0.001).
+
+GenderMale: Being male is associated with an increase in tenure by about 1.94 years compared to being female, keeping the starting age constant. This is statistically significant (p < 0.001), which shows a gender effect on tenure.
+
+Age at start: Each additional year of age at the start of the job is associated with a decrease in tenure by about 0.20 years. This is highly significant (p < 0.001). It means that starting at an older age reduces tenure.
+*Summary* :  
+Significant Predictors: Both gender and age at start are significant predictors of tenure.  
+
+Gender Effect: Males tend to stay in their jobs about 1.95 years longer than females, controlling for age at start.  
+
+Age Effect: Starting at an older age is associated with shorter tenure, with each additional year reducing tenure by about 0.20 years.  
+
+
+```{r echo=FALSE}
+model_exit2 <- lm(tenure ~ Gender + age_exit, data = dfs2)
+summary(model_exit2)
+```
+
+*Model at Age Exit*  
+Model Fit:
+The model explains about 14.14% of the variance in tenure (R-squared = 0.1414). The adjusted R-squared (0.1281) suggests that after adjusting for the number of predictors, approximately 12.81% of the variability in tenure is explained by the model. The F-statistic (10.6) and its associated p-value (5.367e-05) indicate that the overall model is statistically significant.
+
+
+GenderMale: This suggests that being male is associated with an increase of approximately 2.19 years in tenure compared to females, holding age_exit constant.
+
+Age at exit: For each additional year of age at exit, the tenure is expected to increase by approximately 0.15 years This is significant (p < 0.01). 
+
+*Summary* :  
+Significant Predictors: Both gender and age at exit are significant predictors of tenure.  
+
+Gender Effect: Males tend to stay in their jobs about 2.19 years longer than females, controlling for age at exit.  
+
+Age Effect: Exiting at an older age is associated with longer tenure, with each additional year increasing tenure by about 0.15 years.  
+
+
+
+```{r echo=FALSE}
+# Scatter plots with regression lines
+plot_start2 <- ggplot(dfs2, aes(x = age_start, y = tenure, color = Gender)) +
+  geom_point() +
+  geom_smooth(method = "lm", formula = y ~ x, se = FALSE) +
+  labs(title = "Tenure vs Age Start by Gender (Sample 2)",
+       x = "Age Start",
+       y = "Tenure")
+
+plot_exit2 <- ggplot(dfs2, aes(x = age_exit, y = tenure, color = Gender)) +
+  geom_point() +
+  geom_smooth(method = "lm", formula = y ~ x, se = FALSE) +
+  labs(title = "Tenure vs Age Exit by Gender (Sample 2)",
+       x = "Age Exit",
+       y = "Tenure") +
+  scale_color_brewer(palette = "Set1")
+plot_start2
+plot_exit2
+```
+
+
+Tenure vs. Age Start by Gender (Sample 2)
+Both genders show a slight negative correlation between age start and tenure.
+Females show a more pronounced decrease in tenure with increasing age at start compared to males.
+Older starting ages are associated with shorter tenures, especially for females.
+
+Tenure vs. Age Exit by Gender (Sample 2)
+For females, tenure remains relatively constant across different ages of exit.
+For males, tenure increases with the age of exit, indicating a positive correlation.
+Males tend to have longer tenures when they exit at older ages compared to females.
+
+Tenure vs. Age Start by Gender (Sample 1)
+Similar to Sample 2, there is a negative correlation between age start and tenure for both genders.
+Males again show a less steep decline in tenure compared to females.
+Older starting ages correlate with shorter tenures, more so for females than males.
+
+Tenure vs. Age Exit by Gender (Sample 1)
+The pattern is consistent with Sample 2: tenure remains relatively flat for females across different ages of exit.
+Males show a clear positive correlation between age exit and tenure.
+This indicates that males tend to stay longer in their roles if they exit at an older age.
+
+##### Overall Observations:
+*Gender Differences*: Males tend to have longer tenures associated with older exit ages, while females' tenures are less affected by the age of exit.  
+*Start Age Effect*: Starting age negatively impacts tenure for both genders, with a stronger effect observed in females.  
+*Consistency Across Samples*: The patterns observed are consistent across both samples, indicating robust trends.  

@@ -1,0 +1,367 @@
+---
+title: "H6- Sample 2"
+author: "Beyza Bani"
+date: "10-07-2024"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+# Load necessary libraries ------------------------------------------------
+library(ggplot2)
+library(readxl)
+library(dplyr)
+library(tidyr)
+library(scales)
+library(gridExtra) 
+library(knitr)
+library(kableExtra)
+library(broom)
+library(knitr)
+library(stargazer)
+
+# Read the data -----------------------------------------------------------
+df <- read_excel("C:/Users/User/Desktop/osterloh/schilling/data.xlsx")
+```
+
+## H6: Recruitment of more foreign women into Top Management compared to men  
+
+Hypothesis:  
+(H6a) Compared to men in executive positions, women in those roles tend to be recruited more often from abroad.  
+(H6b) They feel less tied to the country they work in, which translates to shorter stays in their leadership role.  
+Rationale: Women in executive positions are more likely to be recruited from abroad because there are not enough career-oriented women willing to take on leadership positions in Switzerland (as opposed to Swiss male candidates). These women tend to leave top management positions more frequently because they have fewer local networks and are less tied to their Swiss employer, resulting in shorter tenure than men.  
+
+Connection to sampling: For this comparison, male and female samples from various companies and nationalities are needed. We can test with the samples only hypothesis H6a by comparing men and women from the same or similar company concerning their nationality (sampling of women and first sampling of 72 men). With the present sample, we cannot test the hypothesis H6b.  
+Variables needed to test H6a:  
+Nationality of men and women  
+Tenure of men and women  
+
+```{r echo=FALSE}
+# cleaning ----------------------------------------------------------------
+
+df <- df[-1, ]%>% 
+  select(Austrittsjahr, Jahrgang, Gender, Sample, Stellenantritt, Nationality, Nationality_co, foreigners_next) %>%
+  mutate_all(as.character) %>%
+  mutate_all(~ recode(., "NA" = NA_character_, "N/A" = NA_character_))
+
+#colSums(is.na(df))
+
+
+# New variables -----------------------------------------------------------
+df <- df %>%
+  drop_na(Jahrgang, Stellenantritt) %>%
+  mutate(age_start = as.numeric(Stellenantritt) - as.numeric(Jahrgang))%>% 
+  mutate(age_exit = as.numeric(Austrittsjahr) - as.numeric(Jahrgang)) %>% 
+  mutate(tenure = as.numeric(Austrittsjahr) - as.numeric(Stellenantritt))
+
+#table(df$Nationality_co)
+```
+
+## Sample 2
+
+```{r echo=FALSE}
+dfs2 <- df %>% 
+  filter(Sample== 0 | Sample==2) %>%
+  drop_na(Nationality) %>% 
+  drop_na(Nationality_co) %>% 
+ mutate(language = case_when(
+    Nationality %in% c("Schweiz", "Osterreich", "Deutschland", 
+                       "China / Deutschland", "Schweiz / Brazil") ~ "German",
+    Nationality %in% c("Frankreich", "Belgien") ~ "French",
+    Nationality %in% c("USA", "Grossbritannien", "Australien", "Irland", "Kanada", 
+                        "Singapur", "Philippinen / USA") ~ "English",
+   TRUE ~ "Other" )) %>% 
+  mutate(nationality_group = factor(case_when(
+    Nationality_co == 0 ~ "Schweiz",
+    TRUE ~ "Foreigner"))) %>% 
+  mutate(nationality_neighbour = factor(case_when(
+    Nationality == "Schweiz" ~ 0,
+    Nationality %in% c("Deutschland", "Frankreich", "Italien", "Osterreich") ~ 1,
+    TRUE ~ 2), 
+    levels = c(0, 1, 2), labels = c("Schweiz", "Neighbours", "Other"))) %>% 
+
+  mutate(Gender = factor(Gender, levels = c(0, 1), labels = c("Female", "Male"))) %>% 
+  mutate(age_start_group = case_when(
+    age_start >= 28 & age_start <= 44 ~ "younger than 45",
+    age_start >= 45 & age_start <= 54 ~ "45-54 years old",
+    age_start >= 55 & age_start <= 73 ~ "55+ years old",)) %>% 
+  mutate(age_exit_group = case_when(
+    age_exit >= 28 & age_exit <= 44 ~ "younger than 45",
+    age_exit >= 45 & age_exit <= 54 ~ "45-54 years old",
+    age_exit >= 55 & age_exit <= 73 ~ "55+ years old",)) %>% 
+  mutate(tenure_group = case_when(
+   tenure >= 1 & tenure <= 3 ~ "1-3 years",
+    tenure >= 4 & tenure <= 6 ~ "4-6 years",
+    tenure >= 7 & tenure <= 9 ~ "7-9 years",
+    tenure >= 10 & tenure <= 12 ~ "10-12 years",
+    tenure >= 13 & tenure <= 27 ~ "13+years"))
+
+
+#table(dfs2$language)
+```
+
+
+```{r pressure, echo=FALSE}
+# Summarize data by gender ------------------------------------------------
+summary_stats1 <- dfs2 %>%
+  group_by(Gender, Nationality) %>%
+  summarize(
+    # mean_age_start = round(mean(age_start, na.rm = TRUE), 1),
+    # mean_age_exit = round(mean(age_exit, na.rm = TRUE), 1),
+    mean_tenure = round(mean(tenure, na.rm = TRUE), 1),
+    # sd_age_start = round(sd(age_start, na.rm = TRUE), 1),
+    # sd_age_exit = round(sd(age_exit, na.rm = TRUE), 1),
+    sd_tenure = round(sd(tenure, na.rm = TRUE), 1),
+    count = n()
+  )
+
+# Display the summary statistics as a table
+summary_stats1 %>%
+  kable(
+    caption = "Summary Statistics by Gender",
+    col.names = c("Gender", "Nationality", "Mean Tenure", "SD Tenure", "Count"),
+    align = "c"
+  ) %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed", "responsive"),
+    full_width = FALSE,
+    position = "center"
+  )
+```
+
+
+```{r echo=FALSE}
+#table(dfs2$Nationality_co)
+
+
+# Stacked bar plot for tenure_group, age_start_group, and age_exit_group by gender -------------
+# Plot for age_start_group and tenure_group by gender
+plot_nationality_tenure <- dfs2 %>% 
+  mutate(tenure_group = factor(tenure_group, 
+                levels = c("1-3 years", "4-6 years", "7-9 years", "10-12 years", "13+years"))) %>%
+  ggplot(aes(x = nationality_group, fill = tenure_group)) +
+  geom_bar(position = "fill", color = "black") +
+  facet_wrap(~Gender, scales = "free_x") +
+  labs(title = "Figure 1.1 Distribution of Tenure by Nationality and Gender",
+       x = "Gender",
+       y = "Tenure (%)",
+       fill = "Tenure Group") +
+  scale_y_continuous(labels = scales::percent_format()) +
+  theme_minimal() +
+   scale_fill_brewer(palette = "Set1") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+plot_nationality_tenure
+
+
+
+
+# Combine dataset with absolute numbers
+dfs2_combined <- dfs2 %>%
+  group_by(nationality_group, Gender, tenure_group) %>%
+  summarise(count = n(), .groups = 'drop') %>%
+  ungroup() %>% 
+  mutate(tenure_group = factor(tenure_group, 
+                levels = c("1-3 years", "4-6 years", "7-9 years", "10-12 years", "13+years")))
+
+# Plot
+
+ggplot(dfs2_combined, aes(x = nationality_group, y = count, fill = tenure_group)) +
+  geom_bar(stat = "identity", position = "stack", color = "black") +
+  facet_wrap(~Gender, scales = "free_x") +
+  geom_text(aes(label = count), 
+            position = position_stack(vjust = 0.5), 
+            color = "white") +
+  labs(title = "Figure 1.1 Distribution of Tenure by Nationality and Gender (Count)",
+       x = "Nationality Group",
+       y = "Count",
+       fill = "Tenure Group") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Set1") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
+# Plot for age_start_group and tenure_group by gender
+plot_language <- dfs2 %>% 
+   mutate(tenure_group = factor(tenure_group, 
+                levels = c("1-3 years", "4-6 years", "7-9 years", "10-12 years", "13+years"))) %>%
+  ggplot(aes(x = language, fill = tenure_group)) +
+  geom_bar(position = "fill", color = "black") +
+  facet_wrap(~Gender, scales = "free_x") +
+  labs(title = "Figure 1.1 Distribution of Tenure by Language Groups and Gender",
+       x = "Language",
+       y = "Tenure (%)",
+       fill = "Tenure Group") +
+  scale_y_continuous(labels = scales::percent_format()) +
+  theme_minimal() +
+   scale_fill_brewer(palette = "Set1") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+plot_language
+
+
+# Plot for age_start_group and tenure_group by gender
+plot_neighbour <- dfs2 %>% 
+   mutate(tenure_group = factor(tenure_group, 
+                levels = c("1-3 years", "4-6 years", "7-9 years", "10-12 years", "13+years"))) %>%
+  ggplot(aes(x = nationality_neighbour, fill = tenure_group)) +
+  geom_bar(position = "fill", color = "black") +
+  facet_wrap(~Gender, scales = "free_x") +
+  labs(title = "Figure 1.1 Distribution of Tenure by Nationality Group and Gender",
+       x = "Nationality Group",
+       y = "Tenure (%)",
+       fill = "Tenure Group") +
+  scale_y_continuous(labels = scales::percent_format()) +
+  theme_minimal() +
+   scale_fill_brewer(palette = "Set1") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+plot_neighbour
+
+# Combine dataset with absolute numbers
+dfs2_combined2 <- dfs2 %>%
+  group_by(nationality_neighbour, Gender, tenure_group) %>%
+  summarise(count = n(), .groups = 'drop') %>%
+  ungroup() %>% 
+  mutate(tenure_group = factor(tenure_group, 
+                levels = c("1-3 years", "4-6 years", "7-9 years", "10-12 years", "13+years")))
+
+# Plot
+
+ggplot(dfs2_combined2, aes(x = nationality_neighbour, y = count, fill = tenure_group)) +
+  geom_bar(stat = "identity", position = "stack", color = "black") +
+  facet_wrap(~Gender, scales = "free_x") +
+  geom_text(aes(label = count), 
+            position = position_stack(vjust = 0.5), 
+            color = "white") +
+  labs(title = "Figure 1.1 Distribution of Tenure by Nationality Group and Gender (Count)",
+       x = "Nationality Group",
+       y = "Count",
+       fill = "Tenure Group") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Set1") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+count3 <- dfs2 %>% 
+   mutate(age_start_group = factor(age_start_group, 
+                                   levels = c("younger than 45", "45-54 years old", "55+ years old"))) %>% 
+   ggplot(aes(x = Gender, y = ..count.., fill = age_start_group, label = ..count..)) +
+   geom_bar(stat = "count", position = position_dodge(width = 0.9)) +
+   geom_text(stat = "count", position = position_dodge(width = 0.9), vjust = -0.5, size = 3) +
+   labs(title = "Figure 1.3 Count Distribution of Gender, Age at Start, and Nationality (Sample1)",
+        x = "Gender",
+        y = "Age group (Count)",
+        fill = "Age Group") +
+   theme_minimal() +
+   scale_fill_brewer(palette = "Dark2") +
+   facet_wrap(~ Nationality_co)
+count3
+
+
+# Ensure your dataset contains the necessary columns and levels
+dfs2 <- dfs2 %>% 
+  mutate(tenure_group = factor(tenure_group, 
+                levels = c("1-3 years", "4-6 years", "7-9 years", "10-12 years", "13+years"))) %>%
+  mutate(age_start_group = factor(age_start_group, 
+                                   levels = c("younger than 45", "45-54 years old", "55+ years old")),
+         tenure_group = factor(tenure_group, ordered = TRUE))
+
+# Create the plot
+count4 <- dfs2 %>%
+  ggplot(aes(x = Gender, fill = nationality_group)) +
+  geom_bar(position = position_dodge(width = 0.9)) +
+  geom_text(stat = "count", aes(label = ..count..), position = position_dodge(width = 0.9), vjust = -0.5, size = 3) +
+  labs(title = "Figure 1.3 Count Distribution of Age Group, Tenure, Gender, and Nationality",
+       x = "Gender",
+       y = "Count",
+       fill = "Nationality") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Dark2") +
+  facet_grid(tenure_group ~ nationality_group)
+```
+
+
+
+### Regression Analysis
+
+```{r echo=FALSE}
+# Regression Analysis -----------------------------------------------------
+
+model_nationality <- lm(tenure ~ Gender + nationality_group , data = dfs2)
+summary(model_nationality)
+
+model_nationality_neighbour <- lm(tenure ~ Gender + nationality_neighbour , data = dfs2)
+summary(model_nationality_neighbour)
+
+# Relevel the language factor so that "German" is the reference category
+dfs2$language <- as.factor(dfs2$language)
+dfs2$language <- relevel(dfs2$language, ref = "German")
+model_language <- lm(tenure ~ Gender + language , data = dfs2)
+summary(model_language)
+```
+
+### Model: Gender and Nationality 
+
+**Model Fit:**  
+
+The model explains about 10.11% of the variance in tenure, with an R-squared of 0.1011. After adjusting for the number of predictors, the adjusted R-squared is 0.08717, indicating that around 8.72% of the variability in tenure is explained by this model. The F-statistic of 7.255 and its associated p-value of 0.001033 show that the model is statistically significant overall.
+
+**Gender:**  
+
+- Men have an average tenure that is about 2.17 years longer than women. This difference is highly significant, with a p-value of 0.0011.
+
+**Nationality:**  
+
+- Being from Switzerland (compared to the reference category-as Switzerland) is associated with an increase in tenure by approximately 0.95 years. However, this effect is not statistically significant (p = 0.1467).
+
+**Summary:**  
+
+Gender is a significant predictor of tenure, with men generally having longer tenures than women by about 2.17 years. Nationality, specifically being from Switzerland, does not significantly impact tenure. The model is statistically significant overall and explains a modest portion of the variance in tenure.
+
+
+
+
+### Model: Gender and Nationality- Neighbour countries
+
+**Model Fit:**  
+
+The model explains about 11.82% of the variance in tenure, with an R-squared of 0.1182. After adjusting for the number of predictors, the adjusted R-squared is 0.09754, indicating that around 9.75% of the variability in tenure is explained by this model. The F-statistic of 5.719 and its associated p-value of 0.00105 show that the model is statistically significant overall.
+
+**Gender:**  
+
+- Men have an average tenure that is about 2.20 years longer than women. This difference is highly significant, with a p-value of 0.000919.
+
+**Nationality:**  
+
+- Being from a neighboring country (compared to the reference category-being from Switzerland) is associated with a decrease in tenure by approximately 1.62 years. This effect is statistically significant (p = 0.038872).
+- Being from another country (compared to the reference category) is associated with a decrease in tenure by about 0.24 years, but this effect is not statistically significant (p = 0.761874).
+
+**Summary:**  
+
+Gender is a significant predictor of tenure, with men generally having longer tenures than women by about 2.20 years. Nationality also impacts tenure, with individuals from neighboring countries having significantly shorter tenures by about 1.62 years compared to the reference category- being from Switzerland. However, being from other countries does not significantly affect tenure. The model is statistically significant overall and explains a modest portion of the variance in tenure.
+
+
+### Model: Gender and Language
+
+**Model Fit:**  
+
+The model explains about 9.14% of the variance in tenure, with an R-squared of 0.09142. After adjusting for the number of predictors, the adjusted R-squared is 0.06281, indicating that around 6.28% of the variability in tenure is explained by this model. The F-statistic of 3.195 and its associated p-value of 0.01545 show that the model is statistically significant overall.
+
+**Gender:**  
+
+- Men have an average tenure that is about 2.20 years longer than women. This difference is highly significant, with a p-value of 0.00173.
+
+**Language:**  
+
+- Speaking English (compared to the reference category-speaking German) is associated with an increase in tenure by approximately 0.12 years, but this effect is not statistically significant (p = 0.90366).  
+
+- Speaking French (compared to the reference category-speaking German) is associated with a decrease in tenure by approximately 0.81 years, but this effect is not statistically significant (p = 0.43880).  
+
+- Speaking other languages (compared to the reference categorspeaking German) is associated with an increase in tenure by approximately 0.14 years, but this effect is not statistically significant (p = 0.89876).  
+
+
+**Summary:**  
+
+Gender is a significant predictor of tenure, with men generally having longer tenures than women by about 2.20 years. Language does not significantly impact tenure, as none of the language categories (English, French, or other languages) showed a statistically significant effect. The model is statistically significant overall and explains a modest portion of the variance in tenure.

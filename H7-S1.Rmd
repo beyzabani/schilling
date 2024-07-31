@@ -1,0 +1,330 @@
+---
+title: "H7-Sample 1"
+author: "Beyza Bani"
+date: "2024-06-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+# Load necessary libraries ------------------------------------------------
+library(ggplot2)
+library(readxl)
+library(dplyr)
+library(tidyr)
+library(scales)
+library(gridExtra) 
+library(knitr)
+library(kableExtra)
+library(broom)
+library(knitr)
+library(stargazer)
+library(rio)
+#install.packages("rio")
+# Read the data -----------------------------------------------------------
+df <- read_excel("C:/Users/User/Desktop/osterloh/schilling/data.xlsx")
+```
+
+
+## H7: Sector-Specific Challenges
+
+
+Hypothesis: Women in certain sectors (e.g., tech, finance) have shorter tenures in executive positions compared to other sectors due to sector-specific challenges.  
+
+Rationale: The tech and finance sectors, among others, are often highlighted for their competitive, high-pressure environments, which may pose unique challenges to women. These challenges can include, but are not limited to, gender bias, underrepresentation, and a lack of supportive networks or mentors. Such environments can intensify the feeling of isolation and hinder the progression of women to leadership positions or their desire to remain long-term in such positions. By examining the tenure of women executives across different sectors, along with the gender of executives, this hypothesis aims to uncover whether certain industries have systemic issues that affect the retention of women in high-level roles.
+Connection to sampling:  
+
+With the sampling of women and the second sampling of 72 men, we could test this hypothesis.  
+
+Variables needed to test H7:  
+
+-	Industry sector,  
+-	Gender of executives,  
+-	Tenure in positions.  
+
+
+```{r echo=FALSE}
+# cleaning ----------------------------------------------------------------
+
+df <- df[-1, ]%>% 
+  select(Austrittsjahr, Jahrgang, Gender, Sample, Stellenantritt, Nationality, Nationality_co, Branche) %>%
+  mutate_all(as.character) %>%
+  mutate_all(~ recode(., "NA" = NA_character_, "N/A" = NA_character_))
+
+#colSums(is.na(df))
+
+
+# New variables -----------------------------------------------------------
+df <- df %>%
+  drop_na(Jahrgang, Stellenantritt) %>%
+  mutate(age_start = as.numeric(Stellenantritt) - as.numeric(Jahrgang))%>% 
+  mutate(age_exit = as.numeric(Austrittsjahr) - as.numeric(Jahrgang)) %>% 
+  mutate(tenure = as.numeric(Austrittsjahr) - as.numeric(Stellenantritt))
+```
+
+## Sample 1
+
+```{r echo=FALSE}
+# SAMPLE 1 ---------------------------------------------------------------
+dfs1 <- df %>%
+  filter(Sample == 0 | Sample == 1) %>%
+  drop_na(Branche) %>%
+  drop_na(Nationality) %>%
+   mutate(language = case_when(
+    Nationality %in% c("Schweiz", "Osterreich", "Deutschland", 
+                       "China / Deutschland", "Schweiz / Brazil") ~ "German",
+    Nationality %in% c("Frankreich", "Belgien") ~ "French",
+    Nationality %in% c("USA", "Grossbritannien", "Australien", "Irland", "Kanada", 
+                        "Singapur", "Philippinen / USA") ~ "English",
+   TRUE ~ "Other" )) %>% 
+ mutate(Branche = case_when(
+      Branche %in% c("Real Estate") ~ "Business Services",
+      Branche %in% c("Wholesale/Commodities") ~ "Retail/Consumer Goods",
+      TRUE ~ Branche))%>% 
+  mutate(sector_middle = case_when(
+    Branche == "Banking" ~ 25,
+    Branche == "Media/ICT" ~ 21,
+    Branche == "Energy" ~ 39,
+    Branche == "Insurance" ~ 31,
+    Branche == "Manufacturing industry" ~ 18,
+    Branche == "Life Sciences" ~ 33,
+    Branche == "Retail/Consumer Goods" ~ 38,
+    Branche == "Transport/Logistics/Tourism" ~ 11,
+    Branche == "Business Services" ~ 35),
+  sector_middle_group = case_when(
+      sector_middle > 28 ~ "High",
+      sector_middle <= 28 ~ "Low")) %>% 
+  mutate(sector_workforce = case_when(
+    Branche == "Banking" ~ 41,
+    Branche == "Media/ICT" ~ 29,
+    Branche == "Energy" ~ 22,
+    Branche == "Insurance" ~ 49,
+    Branche == "Manufacturing industry" ~ 29,
+    Branche == "Life Sciences" ~ 42,
+    Branche == "Retail/Consumer Goods" ~ 46,
+    Branche == "Transport/Logistics/Tourism" ~ 19,
+    Branche == "Business Services" ~ 56),
+  sector_workforce_group = case_when(
+      sector_workforce > 37 ~ "Higher Representativeness",
+      sector_workforce <= 37 ~ "Lower Representativeness")) %>% 
+  mutate(Gender = factor(Gender, levels = c(0, 1), labels = c("Female", "Male"))) %>% 
+  mutate(age_start_group = case_when(
+    age_start >= 28 & age_start <= 44 ~ "younger than 45",
+    age_start >= 45 & age_start <= 54 ~ "45-54 years old",
+    age_start >= 55 & age_start <= 73 ~ "55+ years old",)) %>% 
+  mutate(age_exit_group = case_when(
+    age_exit >= 28 & age_exit <= 44 ~ "younger than 45",
+    age_exit >= 45 & age_exit <= 54 ~ "45-54 years old",
+    age_exit >= 55 & age_exit <= 73 ~ "55+ years old",)) %>% 
+  mutate(tenure_group = case_when(
+    tenure >= 1 & tenure <= 3 ~ "1-3 years",
+    tenure >= 4 & tenure <= 6 ~ "4-6 years",
+    tenure >= 7 & tenure <= 9 ~ "7-9 years",
+    tenure >= 10 & tenure <= 12 ~ "10-12 years",
+    tenure >= 13 & tenure <= 15 ~ "13-15 years",
+    tenure >= 16 & tenure <= 18 ~ "16-18 years",
+    tenure >= 19 ~ "19+ years",))
+
+export(dfs1, "h7.xlsx")
+```
+
+### Summarize Sample 1 by Gender
+
+```{r echo=FALSE}
+# Summarize data by gender ------------------------------------------------
+  summary_stats1 <- dfs1 %>%
+  group_by(Gender, Branche) %>%
+ summarize(
+   # mean_age_start = round(mean(age_start, na.rm = TRUE), 1),
+    #mean_age_exit = round(mean(age_exit, na.rm = TRUE), 1),
+    mean_tenure = round(mean(tenure, na.rm = TRUE), 1),
+   # sd_age_start = round(sd(age_start, na.rm = TRUE), 1),
+  #  sd_age_exit = round(sd(age_exit, na.rm = TRUE), 1),
+   sd_tenure = round(sd(tenure, na.rm = TRUE), 1))
+
+# Display the summary statistics as a table
+summary_stats1 %>%
+  kable(
+    caption = "Summary Statistics of Sectors by Gender",
+    col.names = c("Gender", "Sector", "Mean Tenure", "SD Tenure"),
+    align = "c"
+  ) %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed", "responsive"),
+    full_width = FALSE,
+    position = "center"
+  )
+
+# Create bar plot for mean tenure by gender and Branche
+plot_sum <- ggplot(summary_stats1, aes(x = Branche, y = mean_tenure, fill = Gender)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Mean Tenure by Gender and Sector",
+       x = "Sector",
+       y = "Mean Tenure") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+plot_sum
+```
+
+The mean tenure for males is consistently higher across all sectors compared to females. This highlights a potential systemic issue where females might face challenges that affect their length of stay in executive roles.
+
+```{r pressure, echo=FALSE}
+
+#### Tenure, Sector, Gender by count - middle
+
+count5 <- dfs1 %>% mutate(tenure_group = factor(tenure_group, levels = c(
+  "1-3 years", "4-6 years", "7-9 years", "10-12 years", "13-15 years", "16-18 years", "19+ years"
+))) %>% 
+   ggplot(aes(x = Gender, y = ..count.., fill = tenure_group, label = ..count..)) +
+   geom_bar(stat = "count", position = position_dodge(width = 0.9)) +
+   geom_text(stat = "count", position = position_dodge(width = 0.9), vjust = -0.5, size = 3) +
+   labs(title = "Figure 1.3 Count Distribution of Gender, Tenure, and Sector (Sample1)",
+        x = "Gender",
+        y = "Branche (Count)",
+        fill = "Tenure") +
+   theme_minimal() +
+   scale_fill_brewer(palette = "Dark2") +
+   facet_wrap(~ sector_middle_group)
+count5
+
+
+count3 <- dfs1 %>% 
+   mutate(age_start_group = factor(age_start_group, 
+                                   levels = c("younger than 45", "45-54 years old", "55+ years old"))) %>% 
+   ggplot(aes(x = Gender, y = ..count.., fill = age_start_group, label = ..count..)) +
+   geom_bar(stat = "count", position = position_dodge(width = 0.9)) +
+   geom_text(stat = "count", position = position_dodge(width = 0.9), vjust = -0.5, size = 3) +
+   labs(title = "Figure 1.3 Count Distribution of Gender, Age at Start, and Sector (Sample1)",
+        x = "Gender",
+        y = "Age group (Count)",
+        fill = "Age Group") +
+   theme_minimal() +
+   scale_fill_brewer(palette = "Dark2") +
+   facet_wrap(~ sector_middle_group)
+count3
+
+
+# Ensure your dataset contains the necessary columns and levels
+dfs1 <- dfs1 %>% 
+  mutate(age_start_group = factor(age_start_group, 
+                                   levels = c("younger than 45", "45-54 years old", "55+ years old")),
+         tenure_group = factor(tenure_group, ordered = TRUE))
+
+# Create the plot
+count4 <- dfs1 %>%
+  ggplot(aes(x = Gender, fill = Branche)) +
+  geom_bar(position = position_dodge(width = 0.9)) +
+  geom_text(stat = "count", aes(label = ..count..), position = position_dodge(width = 0.9), vjust = -0.5, size = 3) +
+  labs(title = "Figure 1.3 Count Distribution of Age Group, Tenure, Gender, and Sector",
+       x = "Gender",
+       y = "Count",
+       fill = "Sector") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Dark2") +
+  facet_grid(tenure_group ~ sector_middle_group)
+```
+
+#### General Workforce
+
+```{r}
+
+#### Tenure, Sector, Gender by count - leaky
+
+count6 <- dfs1 %>% mutate(tenure_group = factor(tenure_group, levels = c(
+  "1-3 years", "4-6 years", "7-9 years", "10-12 years", "13-15 years", "16-18 years", "19+ years"
+))) %>% 
+   ggplot(aes(x = Gender, y = ..count.., fill = tenure_group, label = ..count..)) +
+   geom_bar(stat = "count", position = position_dodge(width = 0.9)) +
+   geom_text(stat = "count", position = position_dodge(width = 0.9), vjust = -0.5, size = 3) +
+   labs(title = "Figure 1.3 Count Distribution of Gender, Tenure, and Sector (Sample1)",
+        x = "Gender",
+        y = "Branche (Count)",
+        fill = "Tenure") +
+   theme_minimal() +
+   scale_fill_brewer(palette = "Dark2") +
+   facet_wrap(~ sector_workforce_group)
+count6
+
+
+count7 <- dfs1 %>% 
+   mutate(age_start_group = factor(age_start_group, 
+                                   levels = c("younger than 45", "45-54 years old", "55+ years old"))) %>% 
+   ggplot(aes(x = Gender, y = ..count.., fill = age_start_group, label = ..count..)) +
+   geom_bar(stat = "count", position = position_dodge(width = 0.9)) +
+   geom_text(stat = "count", position = position_dodge(width = 0.9), vjust = -0.5, size = 3) +
+   labs(title = "Figure 1.3 Count Distribution of Gender, Age at Start, and Sector (Sample1)",
+        x = "Gender",
+        y = "Age group (Count)",
+        fill = "Age Group") +
+   theme_minimal() +
+   scale_fill_brewer(palette = "Dark2") +
+   facet_wrap(~ sector_workforce_group)
+count7
+
+
+# Ensure your dataset contains the necessary columns and levels
+dfs1 <- dfs1 %>% 
+  mutate(age_start_group = factor(age_start_group, 
+                                   levels = c("younger than 45", "45-54 years old", "55+ years old")),
+         tenure_group = factor(tenure_group, ordered = TRUE))
+
+# Create the plot
+count8 <- dfs1 %>%
+  ggplot(aes(x = Gender, fill = Branche)) +
+  geom_bar(position = position_dodge(width = 0.9)) +
+  geom_text(stat = "count", aes(label = ..count..), position = position_dodge(width = 0.9), vjust = -0.5, size = 3) +
+  labs(title = "Figure 1.3 Count Distribution of Age Group, Tenure, Gender, and Sector",
+       x = "Gender",
+       y = "Count",
+       fill = "Sector") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Dark2") +
+  facet_grid(tenure_group ~ sector_workforce_group)
+#count8
+```
+### Regression Analysis
+
+```{r echo=FALSE}
+# Regression Analysis -----------------------------------------------------
+
+model_middle_leaky <- lm(tenure ~ Gender + sector_middle_group, data = dfs1)
+summary(model_middle_leaky)
+
+model_sector_workforce <- lm(tenure ~ Gender + sector_workforce_group, data = dfs1)
+summary(model_sector_workforce)
+
+model <- lm(tenure  ~ Gender + sector_middle_group +language + age_start_group , data = dfs1)
+model
+```
+Model Fit:
+The model explains about 15.17% of the variance in tenure (R-squared = 0.1517). The adjusted R-squared (0.1244) suggests that after adjusting for the number of predictors, approximately 12.44% of the variability in tenure is explained by the model. The F-statistic (5.546) and its associated p-value (0.0003855) indicate that the overall model is statistically significant.
+
+Sector Group:
+Lower-Pressure Sector: Being in the lower-pressure sector (compared to the reference category-high pressure sector) is associated with a decrease in tenure by approximately 1.29 years, but this coefficient is not significant (p = 0.279).
+Miscellaneous Sector: Being in the miscellaneous sector (compared to the reference category-high pressure sector) is associated with a decrease in tenure by approximately 2.03 years, and this coefficient is marginally significant (p = 0.052).
+Moderate-Pressure Sector: Being in the moderate-pressure sector (compared to the reference category-high pressure sector) is associated with a decrease in tenure by approximately 2.24 years, and this coefficient is significant (p = 0.041).  
+Gender:  
+Male: Males have a tenure that is approximately 3.06 years longer than females, and this coefficient is highly significant (p < 0.001).  
+Summary:  
+Gender and sector group are significant predictors of tenure.   
+Males tend to have longer tenures than females by about 3.06 years.  
+Being in the moderate-pressure sector is associated with significantly shorter tenures compared to the high pressure sector.  
+The model is statistically significant and explains a moderate proportion of the variance in tenure.
+
+
+```{r echo=FALSE}
+# Scatter plots with regression lines
+plot <- ggplot(dfs1, aes(x = tenure, y = sector_middle_group, color = Gender)) +
+  geom_point() +
+  geom_smooth(method = "lm", formula = y ~ x, se = FALSE) +
+  labs(title = "Figure 1.3 Tenure vs Sector Groups by Gender (Sample 1)",
+       x = "Tenure",
+       y = "Sector")
+#plot
+
+```
+
+### Summary:  
+*Gender*: Being male is significantly associated with longer tenures.  
+*Nationality*: Neither "Neighbours" nor "Other" nationality categories show significant effects on tenure.  
+*Age Start Group*: Starting in older age groups (45-54 years old and 55+ years old) is significantly associated with shorter tenures.  

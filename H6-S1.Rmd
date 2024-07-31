@@ -1,0 +1,182 @@
+---
+title: "H6-Sample 1"
+author: "Beyza Bani"
+date: "2024-05-17"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+# Load necessary libraries ------------------------------------------------
+library(ggplot2)
+library(readxl)
+library(dplyr)
+library(tidyr)
+library(scales)
+library(gridExtra) 
+library(knitr)
+library(kableExtra)
+library(broom)
+library(knitr)
+library(stargazer)
+
+# Read the data -----------------------------------------------------------
+df <- read_excel("C:/Users/User/Desktop/osterloh/schilling/data.xlsx")
+```
+
+
+## H6: Recruitment of more foreign women into Top Management compared to men  
+
+Hypothesis:  
+(H6a) Compared to men in executive positions, women in those roles tend to be recruited more often from abroad.  
+(H6b) They feel less tied to the country they work in, which translates to shorter stays in their leadership role.  
+Rationale: Women in executive positions are more likely to be recruited from abroad because there are not enough career-oriented women willing to take on leadership positions in Switzerland (as opposed to Swiss male candidates). These women tend to leave top management positions more frequently because they have fewer local networks and are less tied to their Swiss employer, resulting in shorter tenure than men.  
+
+Connection to sampling: For this comparison, male and female samples from various companies and nationalities are needed. We can test with the samples only hypothesis H6a by comparing men and women from the same or similar company concerning their nationality (sampling of women and first sampling of 72 men). With the present sample, we cannot test the hypothesis H6b.  
+Variables needed to test H6a:  
+Nationality of men and women  
+Tenure of men and women  
+
+
+```{r echo=FALSE}
+# cleaning ----------------------------------------------------------------
+
+df <- df[-1, ]%>% 
+  select(Austrittsjahr, Jahrgang, Gender, Sample, Stellenantritt, Nationalität, Nationalität_co) %>%
+  mutate_all(as.character) %>%
+  mutate_all(~ recode(., "NA" = NA_character_, "N/A" = NA_character_))
+
+#colSums(is.na(df))
+
+
+# New variables -----------------------------------------------------------
+df <- df %>%
+  drop_na(Jahrgang, Stellenantritt) %>%
+  mutate(age_start = as.numeric(Stellenantritt) - as.numeric(Jahrgang))%>% 
+  mutate(age_exit = as.numeric(Austrittsjahr) - as.numeric(Jahrgang)) %>% 
+  mutate(tenure = as.numeric(Austrittsjahr) - as.numeric(Stellenantritt))
+```
+
+## Sample 1
+
+```{r echo=FALSE}
+# SAMPLE 1 ----------------------------------------------------------------
+dfs1 <- df %>% 
+  filter(Sample== 0 | Sample==1) %>%
+  drop_na(Nationalität) %>% 
+  mutate(Gender = factor(Gender, levels = c(0, 1), labels = c("Female", "Male"))) %>% 
+  mutate(Nationalität_co = factor(Nationalität_co, levels = c(0, 1, 2, 3), labels = c("Schweiz", "Ausland_westlich", "Ausland_dritte_Staat", "Mischung"))) %>% 
+  mutate(tenure_group = case_when(
+    tenure >= 1 & tenure <= 3 ~ "1-3 years",
+    tenure >= 4 & tenure <= 6 ~ "4-6 years",
+    tenure >= 7 & tenure <= 9 ~ "7-9 years",
+    tenure >= 10 & tenure <= 12 ~ "10-12 years",
+    tenure >= 13 & tenure <= 15 ~ "13-15 years",
+    tenure >= 16 & tenure <= 18 ~ "16-18 years",
+    tenure >= 19 ~ "19+ years",))
+```
+
+### Summarize Sample 1 by Gender
+
+```{r echo=FALSE}
+# Summarize data by gender ------------------------------------------------
+  summary_stats1 <- dfs1 %>%
+  group_by(Gender, Nationalität) %>%
+ summarize(
+   # mean_age_start = round(mean(age_start, na.rm = TRUE), 1),
+    #mean_age_exit = round(mean(age_exit, na.rm = TRUE), 1),
+    mean_tenure = round(mean(tenure, na.rm = TRUE), 1),
+   # sd_age_start = round(sd(age_start, na.rm = TRUE), 1),
+  #  sd_age_exit = round(sd(age_exit, na.rm = TRUE), 1),
+   sd_tenure = round(sd(tenure, na.rm = TRUE), 1)
+  )
+
+# Display the summary statistics as a table
+summary_stats1 %>%
+  kable(
+    caption = "Summary Statistics by Gender",
+    col.names = c("Gender", "Nationalität", "Mean Tenure", "SD Tenure"),
+    align = "c"
+  ) %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed", "responsive"),
+    full_width = FALSE,
+    position = "center"
+  )
+```
+
+
+```{r pressure, echo=FALSE}
+#table(dfs1$Nationalität_co)
+# Stacked bar plot for tenure_group, age_start_group, and age_exit_group by gender -------------
+# Plot for age_start_group and tenure_group by gender
+plot_nationality_tenure <- dfs1 %>%  mutate(tenure_group = factor(tenure_group, levels = c(
+  "1-3 years", "4-6 years", "7-9 years", "10-12 years", "13-15 years", "16-18 years", "19+ years"
+))) %>% 
+  ggplot(aes(x = Nationalität_co, fill = tenure_group)) +
+  geom_bar(position = "fill", color = "black") +
+  facet_wrap(~Gender, scales = "free_x") +
+  labs(title = "Figure 1.1 Distribution of Tenure by Age Start and Gender",
+       x = "Age Group",
+       y = "Tenure (%)",
+       fill = "Tenure Group") +
+  scale_y_continuous(labels = scales::percent_format()) +
+  theme_minimal() +
+   scale_fill_brewer(palette = "Set1") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+plot_nationality_tenure
+```
+
+### Regression Analysis
+
+```{r echo=FALSE}
+# Regression Analysis -----------------------------------------------------
+
+dfs1 <- dfs1 %>%
+  mutate(nationalität_co = factor(case_when(
+    Nationalität == "Schweiz" ~ 0,
+    TRUE ~ 1
+  ), levels = c(0, 1), labels = c("Schweiz", "Ausland")))
+
+model_nationality <- lm(tenure ~ Gender + Nationalität_co, data = dfs1)
+summary(model_nationality)
+```
+*Model Nationality*  
+
+Model Fit: The model explains about 22.5% of the variance in tenure (R-squared = 0.225). The adjusted R-squared (0.2127) suggests that after adjusting for the number of predictors, approximately 21.27% of the variability in tenure is explained by the model. The F-statistic (18.29) and its associated p-value (1.061e-07) indicate that the overall model is statistically significant.
+
+Intercept: When GenderMale is 0 (female) and age_start is 0, the predicted tenure is 16.94 years. This coefficient is highly significant (p < 0.001).
+Being male (compared to female) is associated with an increase in tenure by approximately 2.80 years, 
+if we keep age_start constant. This coefficient is highly significant (p < 0.001).
+
+
+Each additional year of age at start is associated with a decrease in tenure by approximately 0.25 years, keeping gender constant. This coefficient is highly significant (p < 0.001).
+
+
+*Summary* :
+Gender and age at start are both significant predictors of tenure.  
+Males tend to have longer tenures than females by about 2.80 years.  
+Starting at an older age is associated with shorter tenures.  
+The model is statistically significant and explains a moderate proportion of the variance in tenure.  
+
+```{r echo=FALSE}
+# Scatter plots with regression lines
+plot_nation <- ggplot(dfs1, aes(x = Nationalität_co, y = tenure, color = Gender)) +
+  geom_point() +
+  geom_smooth(method = "lm", formula = y ~ x, se = FALSE) +
+  labs(title = "Figure 1.3 Tenure vs Age Start by Gender (Sample 1)",
+       x = "Age Start",
+       y = "Tenure") +
+     scale_color_brewer(palette = "Set2")
+plot_nation
+
+
+```
+
+
+
+##### Overall Observations:
+*Gender Differences*: Males tend to have longer tenures associated with older exit ages, while females' tenures are less affected by the age of exit.  
+*Start Age Effect*: Starting age negatively impacts tenure for both genders, with a stronger effect observed in females.  
+*Consistency Across Samples*: The patterns observed are consistent across both samples, indicating robust trends.  

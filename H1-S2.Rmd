@@ -1,0 +1,418 @@
+---
+title: "H1-Sample 2"
+author: "Beyza Bani"
+date: "2024-06-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+# Load necessary libraries ------------------------------------------------
+library(ggplot2)
+library(readxl)
+library(dplyr)
+library(tidyr)
+library(scales)
+library(gridExtra) 
+library(knitr)
+library(kableExtra)
+library(broom)
+library(knitr)
+library(stargazer)
+library(rio)
+library(lmtest)
+library(sandwich)
+
+# Read the data -----------------------------------------------------------
+df <- read_excel("C:/Users/User/Desktop/osterloh/schilling/data.xlsx")
+```
+## H1: Poaching 
+Hypothesis: Companies poach women working in leadership positions at other firms to comply with the share of 20 percent female executives. This leads to a reduced tenure of women compared to men.  
+
+Rationale: This practice increases fluctuation among executive females, which translates to shorter tenures compared to their male colleagues.  
+
+Connection to Sampling: To test this hypothesis, we need to know the tenure of men and women, the executive’s prior position and their subsequent position in the respective companies ( sampling of women and first sampling of 72 men).  
+
+Variables needed to test H1  
+o Tenure of men and women in the respective companies  
+o Prior and subsequent companies in which men and women are employed.  
+o Prior and subsequent positions of men and women  
+
+```{r echo=FALSE}
+# cleaning ----------------------------------------------------------------
+
+df <- df[-1, ]%>% 
+  select(Austrittsjahr, Jahrgang, Gender, Sample, Stellenantritt, Nationality, Nationality_co, Branche, PriorPosition,	PriorWechselUnternehmen,	prior_code, tenure_prior, prior_position_code) %>%
+  mutate_all(as.character) %>%
+  mutate_all(~ recode(., "NA" = NA_character_, "N/A" = NA_character_))
+
+
+#colSums(is.na(df))
+
+
+# New variables -----------------------------------------------------------
+df <- df %>%
+  drop_na(Jahrgang, Stellenantritt) %>%
+  mutate(age_start = as.numeric(Stellenantritt) - as.numeric(Jahrgang))%>% 
+  mutate(age_exit = as.numeric(Austrittsjahr) - as.numeric(Jahrgang)) %>% 
+  mutate(tenure = as.numeric(Austrittsjahr) - as.numeric(Stellenantritt))
+#table(df$prior_code)
+#table(df$tenure_prior)
+#table(df$prior_position_code)
+#sum(is.na(df$prior_code))
+#sum(is.na(df$prior_position_code))
+
+#table(df$tenure_prior)
+```
+
+## Sample 2
+
+```{r echo=FALSE}
+# SAMPLE 2 ---------------------------------------------------------------
+dfs1 <- df %>%
+  filter(Sample == 0 | Sample == 2) %>%
+ # drop_na(Branche) %>%
+  drop_na(prior_code) %>% 
+  drop_na(tenure_prior) %>% 
+  drop_na(prior_position_code) %>%
+ #mutate(Branche = case_when(
+  #    Branche %in% c("Real Estate") ~ "Business Services",
+   #   Branche %in% c("Wholesale/Commodities") ~ "Retail/Consumer Goods",
+    #  TRUE ~ Branche))%>% 
+  mutate(Gender = factor(Gender, levels = c(0, 1), labels = c("Female", "Male"))) %>% 
+  #mutate(age_start_group = case_when(
+   # age_start >= 28 & age_start <= 44 ~ "younger than 45",
+  #  age_start >= 45 & age_start <= 54 ~ "45-54 years old",
+   # age_start >= 55 & age_start <= 73 ~ "55+ years old",)) %>% 
+  #mutate(age_exit_group = case_when(
+   # age_exit >= 28 & age_exit <= 44 ~ "younger than 45",
+  #  age_exit >= 45 & age_exit <= 54 ~ "45-54 years old",
+   # age_exit >= 55 & age_exit <= 73 ~ "55+ years old",)) %>% 
+  #drop_na(Nationality) %>%
+   #mutate(language = case_when(
+    #Nationality %in% c("Schweiz", "Osterreich", "Deutschland", 
+     #                  "China / Deutschland", "Schweiz / Brazil") ~ "German",
+    #Nationality %in% c("Frankreich", "Belgien") ~ "French",
+    #Nationality %in% c("USA", "Grossbritannien", "Australien", "Irland", "Kanada", 
+     #                   "Singapur", "Philippinen / USA") ~ "English",
+   #TRUE ~ "Other" )) %>% 
+  #mutate(prior_code_label = case_when(
+   # prior_code == 0 ~ "Wechsel zu gleich grossem Unternehmen",
+    #prior_code == 1 ~ "Wechsel zu grosserem Unternehmen (Borsenwert)",
+    #prior_code == 2 ~ "Wechsel zu kleinerem Unternehmen (Borsenwert)",
+    #prior_code == 3 ~ "blieb im gleichen Unternehmen",)) %>% 
+mutate(tenure_group = case_when(
+    tenure >= 1 & tenure <= 3 ~ "1-3 years",
+    tenure >= 4 & tenure <= 6 ~ "4-6 years",
+    tenure >= 7 & tenure <= 9 ~ "7-9 years",
+    tenure >= 10 & tenure <= 12 ~ "10-12 years",
+    tenure >= 13 & tenure <= 27 ~ "13+ years",)) %>% 
+mutate(tenure_prior = as.numeric(tenure_prior)) %>% 
+mutate(tenure_prior_group = case_when(
+    tenure_prior >= 0 & tenure_prior <= 2 ~ "0-2 years",
+    tenure_prior >= 3 & tenure_prior <= 5 ~ "3-5 years",
+    tenure_prior >= 6 & tenure_prior <= 10 ~ "6-10 years",
+    tenure_prior >=11 & tenure_prior <= 30 ~ "11+ years")) %>%
+mutate(tenure_prior_group = factor(tenure_prior_group, 
+                                   levels = c("0-2 years", "3-5 years", "6-10 years", "11+ years")))
+# Check the structure and summary of the transformed tenure_prior_group
+#str(dfs1$tenure_prior_group)
+#summary(dfs1$tenure_prior_group)
+
+# Check the table of tenure_prior to see raw values
+#table(dfs1$tenure_prior)
+
+# Check the table of tenure_prior_group to see grouped values
+#table(dfs1$tenure_prior_group)
+#export(dfs1, "dataset.xlsx")
+```
+
+
+```{r echo=FALSE}
+dfs1 %>% mutate(tenure_group = factor(tenure_group, levels = c(
+  "1-3 years", "4-6 years", "7-9 years", "10-12 years", "13+ years"))) %>% 
+ggplot(aes(x = factor(prior_code), fill = tenure_group)) +
+  geom_bar(position = "dodge") +
+  scale_x_discrete(labels = c(
+    `0` = "Wechsel zu\ngleich grossem\nUnternehmen",
+    `1` = "Wechsel zu\ngrösserem Unternehmen\n(Börsenwert)",
+    `2` = "Wechsel zu\nkleinerem Unternehmen\n(Börsenwert)",
+    `3` = "blieb im\ngleichen Unternehmen"
+  )) +
+  labs(x = "Prior Wechsel Unternehmen", y = "Count", fill = "Tenure Group") +
+  ggtitle("Bar Plot of Tenure Group by Prior Wechsel Unternehmen") +
+  theme_minimal()+
+  geom_text(stat='count', aes(label=..count..), position=position_dodge(width=0.9), vjust=-0.5)
+
+#table(dfs1$prior_code_label)
+
+
+#Percentage plot
+dfs1 <- dfs1 %>%
+  mutate(tenure_group = factor(tenure_group, levels = c(
+    "1-3 years", "4-6 years", "7-9 years", "10-12 years", "13+ years")))
+
+# Create the percentage bar plot with renamed prior_code values in the plot
+ggplot(dfs1, aes(x = factor(prior_code), fill = tenure_group)) +
+  geom_bar(position = "fill") +
+  scale_x_discrete(labels = c(
+    `0` = "Wechsel zu\ngleich grossem\nUnternehmen",
+    `1` = "Wechsel zu\ngrösserem Unternehmen\n(Börsenwert)",
+    `2` = "Wechsel zu\nkleinerem Unternehmen\n(Börsenwert)",
+    `3` = "blieb im\ngleichen Unternehmen"
+  )) +
+  labs(x = "Prior Wechsel Unternehmen", y = "Percentage", fill = "Tenure Group") +
+  ggtitle("Percentage Bar Plot of Tenure Group by Prior Wechsel Unternehmen") +
+  theme_minimal() +
+  geom_text(aes(label=scales::percent(..count../tapply(..count..,..x..,sum)[..x..], accuracy = 1)), 
+            stat='count', position=position_fill(vjust=0.5))
+
+
+```
+
+```{r echo=FALSE}
+
+dfs1 %>% mutate(tenure_group = factor(tenure_group, levels = c(
+  "1-3 years", "4-6 years", "7-9 years", "10-12 years", "13+ years"))) %>% 
+ggplot(aes(x = factor(prior_code), fill = tenure_group)) +
+  geom_bar(position = "dodge") +
+  scale_x_discrete(labels = c(
+    `0` = "Wechsel zu\ngleich grössem\nUnternehmen",
+    `1` = "Wechsel zu\ngrosserem Unternehmen\n(Börsenwert)",
+    `2` = "Wechsel zu\nkleinerem Unternehmen\n(Börsenwert)",
+    `3` = "blieb im\ngleichen Unternehmen"
+  )) +
+  labs(x = "Prior Wechsel Unternehmen", y = "Count", fill = "Tenure Group") +
+  ggtitle("Bar Plot of Tenure Group by Prior Wechsel Unternehmen") +
+  theme_minimal()+
+  geom_text(stat='count', aes(label=..count..), position=position_dodge(width=0.9), vjust=-0.5)
+
+#table(dfs1$prior_code_label)
+
+
+#Percentage plot
+dfs1 %>% mutate(tenure_group = factor(tenure_group, levels = c(
+  "1-3 years", "4-6 years", "7-9 years", "10-12 years", "13+ years"))) %>% 
+
+# Create the percentage bar plot with renamed prior_code values in the plot
+ggplot(aes(x = factor(prior_code), fill = tenure_group)) +
+  geom_bar(position = "fill") +
+  scale_x_discrete(labels = c(
+    `0` = "Wechsel zu\ngleich grossem\nUnternehmen",
+    `1` = "Wechsel zu\ngrösserem Unternehmen\n(Börsenwert)",
+    `2` = "Wechsel zu\nkleinerem Unternehmen\n(Börsenwert)",
+    `3` = "blieb im\ngleichen Unternehmen"
+  )) +
+  labs(x = "Prior Wechsel Unternehmen", y = "Percentage", fill = "Tenure Group") +
+  ggtitle("Percentage Bar Plot of Tenure Group by Prior Wechsel Unternehmen") +
+  theme_minimal() +
+  geom_text(aes(label=scales::percent(..count../tapply(..count..,..x..,sum)[..x..], accuracy = 1)), 
+            stat='count', position=position_fill(vjust=0.5))
+
+```
+
+```{r echo=FALSE}
+
+ggplot(data=dfs1, aes(x = factor(prior_code), fill = Gender)) +
+  geom_bar(position = "dodge") +
+  scale_x_discrete(labels = c(
+    `0` = "Wechsel zu\ngleich grossem\nUnternehmen",
+    `1` = "Wechsel zu\ngrösserem Unternehmen\n(Börsenwert)",
+    `2` = "Wechsel zu\nkleinerem Unternehmen\n(Börsenwert)",
+    `3` = "blieb im\ngleichen Unternehmen"
+  )) +
+  labs(x = "Prior Wechsel Unternehmen", y = "Count", fill = "Gender") +
+  ggtitle("Bar Plot of Prior Wechsel Unternehmen by Gender") +
+  theme_minimal()+
+  geom_text(stat='count', aes(label=..count..), position=position_dodge(width=0.9), vjust=-0.5)
+
+
+
+#Percentage plot
+# Create the percentage bar plot with renamed prior_code values in the plot
+ggplot(dfs1, aes(x = factor(prior_code), fill = Gender)) +
+  geom_bar(position = "fill") +
+  scale_x_discrete(labels = c(
+    `0` = "Wechsel zu\ngleich grossem\nUnternehmen",
+    `1` = "Wechsel zu\ngrösserem Unternehmen\n(Börsenwert)",
+    `2` = "Wechsel zu\nkleinerem Unternehmen\n(Börsenwert)",
+    `3` = "blieb im\ngleichen Unternehmen"
+  )) +
+  labs(x = "Prior Code", y = "Percentage", fill = "Gender") +
+  ggtitle("Percentage Bar Plot of Prior Wechsel Unternehmen by Gender") +
+  theme_minimal() +
+  geom_text(aes(label=scales::percent(..count../tapply(..count..,..x..,sum)[..x..], accuracy = 1)), 
+            stat='count', position=position_fill(vjust=0.5))
+
+
+
+
+### combination of absolute numbers and percentage
+
+# Combine dataset with absolute numbers and percentages
+dfs1_combined <- dfs1 %>%
+  group_by(prior_code, Gender) %>%
+  summarise(count = n()) %>%
+  ungroup()
+
+# Calculate percentages
+total_counts <- dfs1_combined %>%
+  group_by(prior_code) %>%
+  summarise(total = sum(count))
+
+dfs1_combined <- dfs1_combined %>%
+  left_join(total_counts, by = "prior_code") %>%
+  mutate(percentage = (count / total) * 100)
+
+# Plot
+ggplot(dfs1_combined, aes(x = factor(prior_code), y = count, fill = Gender)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_text(aes(label = paste0(round(percentage, 1), "%")), 
+            position = position_dodge(width = 0.9), 
+            vjust = -0.5) +
+  scale_x_discrete(labels = c(
+    `0` = "Wechsel zu\ngleich grossem\nUnternehmen",
+    `1` = "Wechsel zu\ngrösserem Unternehmen\n(Börsenwert)",
+    `2` = "Wechsel zu\nkleinerem Unternehmen\n(Börsenwert)",
+    `3` = "blieb im\ngleichen Unternehmen"
+  )) +
+  labs(title = "Gender Distribution by Prior Wechsel Unternehmen", 
+       x = "Prior Wechsel Unternehmen", 
+       y = "Count", 
+       fill = "Gender") +
+  theme_minimal()
+
+
+
+
+
+```
+
+
+```{r echo=FALSE}
+dfs1_complete <- dfs1 %>%
+  complete(tenure_prior_group, Gender, fill = list(n = 0))
+
+# Generate the bar plot for tenure_prior_group and Gender
+gender_tenure_plot <- ggplot(dfs1_complete, aes(x = tenure_prior_group, fill = Gender)) +
+  geom_bar(position = "dodge") +
+  labs(x = "Tenure Prior Group", y = "Count", fill = "Gender") +
+  ggtitle("Bar Plot of Gender by Tenure Prior Group") +
+  theme_minimal() +
+  scale_fill_manual(values = c("Female" = "#FF69B4", "Male" = "#1E90FF")) +
+  geom_text(stat = 'count', aes(label = ..count..), position = position_dodge(width = 0.9), vjust = -0.5)
+
+# Print the plot
+print(gender_tenure_plot)
+
+
+# Ensure that all combinations of tenure_prior_group and Gender are included
+dfs1_complete <- dfs1 %>%
+  complete(tenure_prior_group, Gender, fill = list(n = 0))
+
+# Combine dataset with absolute numbers and percentages
+dfs1_combined <- dfs1_complete %>%
+  group_by(tenure_prior_group, Gender) %>%
+  summarise(count = n()) %>%
+  ungroup()
+
+# Calculate percentages
+total_counts <- dfs1_combined %>%
+  group_by(tenure_prior_group) %>%
+  summarise(total = sum(count))
+
+dfs1_combined <- dfs1_combined %>%
+  left_join(total_counts, by = "tenure_prior_group") %>%
+  mutate(percentage = (count / total) * 100)
+
+# Plot
+ggplot(dfs1_combined, aes(x = tenure_prior_group, y = count, fill = Gender)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_text(aes(label = paste0(round(percentage, 1), "%")), 
+            position = position_dodge(width = 0.9), 
+            vjust = -0.5) +
+  labs(title = "Gender Distribution by Tenure Prior Group", 
+       x = "Tenure Prior Group", 
+       y = "Count", 
+       fill = "Gender") +
+  theme_minimal() +
+  scale_fill_manual(values = c("Female" = "#FF69B4", "Male" = "#1E90FF"))
+
+```
+
+
+### Regression Analysis
+
+#### Model1 - Prior Wechsel Unternehmen:
+
+```{r echo=FALSE}
+# Regression Analysis -----------------------------------------------------
+
+#Age at start and tenure
+dfs1$prior_code <- relevel(as.factor(dfs1$prior_code), ref = "0")
+
+# Fit the model
+model1 <- lm(tenure ~ prior_code, data = dfs1)
+summary(model1)
+
+# Plot the points
+#plot(dfs1$prior_code, dfs1$tenure, xlab = "Age Start Group", ylab = "Tenure")
+
+# Add mean lines for each group
+#levels <- levels(dfs1$age_start_group)
+#means <- tapply(dfs1$tenure, dfs1$age_start_group, mean)
+
+#for (i in seq_along(levels)) {
+ # segments(i - 0.5, means[levels[i]], i + 0.5, means[levels[i]], col = "blue", lwd = 2)}
+```
+
+The model explains about 1.53% of the variance in tenure (R-squared = 0.01526). The adjusted R-squared (-0.008187) suggests that after adjusting for the number of predictors, the model does not explain any variability in tenure and instead indicates that the predictors do not contribute meaningfully to the model. The F-statistic (0.6508) and its associated p-value (0.5839) indicate that the overall model is not statistically significant.
+
+Intercept:
+When an individual changes to a company of the same size (reference category, prior_code = 0), the predicted tenure is 4.50 years. This coefficient is significant at the 5% level (p = 0.0173).
+
+Prior Company Change:  
+
+- **Changing to a larger company (prior_code = 1)** is associated with an increase in tenure by approximately 1.97 years. This coefficient is not significant (p = 0.3162).  
+
+- **Changing to a smaller company (prior_code = 2)** is associated with an increase in tenure by approximately 0.95 years. This coefficient is not significant (p = 0.6346).  
+
+- **Staying in the same company (prior_code = 3)** is associated with an increase in tenure by approximately 1.26 years. This coefficient is not significant (p = 0.5137).  
+
+
+**Summary:**
+The type of company change (coded as prior_code) does not significantly influence tenure. None of the categories (change to a larger company, change to a smaller company, or stay in the same company) are associated with statistically significant changes in tenure. This model is not statistically significant and it does not provide a meaningful explanation for the data. Additionally, the model explains a negligible proportion of the variance in tenure. The residual standard error of 3.731 on 126 degrees of freedom shows that there is considerable unexplained variability in tenure that the model does not capture.
+
+
+#### Model2 - Prior Position:
+
+```{r echo=FALSE}
+# Regression Analysis -----------------------------------------------------
+
+#Age at start and tenure
+dfs1$prior_position_code <- relevel(as.factor(dfs1$prior_position_code), ref = "0")
+
+# Fit the model
+model2 <- lm(tenure ~ prior_position_code, data = dfs1)
+summary(model2)
+```
+
+
+
+The model explains about 2.80% of the variance in tenure (R-squared = 0.02797). The adjusted R-squared (0.004825) suggests that after adjusting for the number of predictors, the model does not explain much variability in tenure and indicates that the predictors do not contribute meaningfully to the model. The F-statistic (1.208) and its associated p-value (0.3095) indicate that the overall model is not statistically significant.
+
+Intercept:
+When an individual remains in the same position (reference category, prior_position_code = 0), the predicted tenure is 5.4595 years. This coefficient is highly significant (p < 0.001).
+
+Prior Position Change:  
+
+- **Moving to a higher position (prior_position_code = 1)** is associated with an increase in tenure by approximately 4.2072 years. This coefficient is marginally significant (p = 0.061).  
+
+- **Moving to a lower position (prior_position_code = 2)** is associated with an increase in tenure by approximately 0.4101 years. This coefficient is not significant (p = 0.588).  
+
+- **Changing to a different position (prior_position_code = 3)** is associated with an increase in tenure by approximately 0.5405 years. This coefficient is not significant (p = 0.595).  
+
+
+**Summary:**  
+
+The type of position change (coded as prior_position_code) does not significantly influence tenure. None of the categories (moving to a higher position, moving to a lower position, or changing to a different position) are associated with statistically significant changes in tenure. This model is not statistically significant and it does not provide a meaningful explanation for the data. Additionally, the model explains a negligible proportion of the variance in tenure. The residual standard error of 3.707 on 126 degrees of freedom shows that there is considerable unexplained variability in tenure that the model does not capture.
