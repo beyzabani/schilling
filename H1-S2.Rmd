@@ -1,7 +1,7 @@
 ---
 title: "H1-Sample 2"
 author: "Beyza Bani"
-date: "2024-06-24"
+date: "12-08-2024"
 output: html_document
 ---
 
@@ -42,377 +42,704 @@ o Prior and subsequent positions of men and women
 # cleaning ----------------------------------------------------------------
 
 df <- df[-1, ]%>% 
-  select(Austrittsjahr, Jahrgang, Gender, Sample, Stellenantritt, Nationality, Nationality_co, Branche, PriorPosition,	PriorWechselUnternehmen,	prior_code, tenure_prior, prior_position_code) %>%
+  select(Austrittsjahr, Jahrgang, Gender, Sample, Stellenantritt, Nationality, Nationality_co, Branche, PriorPosition,	PriorWechselUnternehmen,	prior_code, tenure_prior, prior_position_code, prior_status, schilling_status) %>%
   mutate_all(as.character) %>%
   mutate_all(~ recode(., "NA" = NA_character_, "N/A" = NA_character_))
 
 
-#colSums(is.na(df))
-
-
 # New variables -----------------------------------------------------------
-df <- df %>%
+df_age <- df %>%
   drop_na(Jahrgang, Stellenantritt) %>%
   mutate(age_start = as.numeric(Stellenantritt) - as.numeric(Jahrgang))%>% 
   mutate(age_exit = as.numeric(Austrittsjahr) - as.numeric(Jahrgang)) %>% 
+  mutate(current_age = 2023 - as.numeric(Jahrgang))
+df_tenure <- df %>% 
+  drop_na(Stellenantritt) %>% 
   mutate(tenure = as.numeric(Austrittsjahr) - as.numeric(Stellenantritt))
-#table(df$prior_code)
-#table(df$tenure_prior)
-#table(df$prior_position_code)
-#sum(is.na(df$prior_code))
-#sum(is.na(df$prior_position_code))
 
-#table(df$tenure_prior)
+#table(df$prior_code)
+#table(df$prior_status)
 ```
 
 ## Sample 2
 
+
 ```{r echo=FALSE}
-# SAMPLE 2 ---------------------------------------------------------------
-dfs1 <- df %>%
+dfs1 <- df_tenure %>%
   filter(Sample == 0 | Sample == 2) %>%
- # drop_na(Branche) %>%
-  drop_na(prior_code) %>% 
-  drop_na(tenure_prior) %>% 
-  drop_na(prior_position_code) %>%
- #mutate(Branche = case_when(
-  #    Branche %in% c("Real Estate") ~ "Business Services",
-   #   Branche %in% c("Wholesale/Commodities") ~ "Retail/Consumer Goods",
-    #  TRUE ~ Branche))%>% 
+  drop_na(prior_code) %>%
+  mutate(prior_code_group = case_when(
+    prior_code == 0 | prior_code == 1 | prior_code == 2 ~ "changed company",
+    prior_code == 3 ~ "stayed in the same company")) %>% 
   mutate(Gender = factor(Gender, levels = c(0, 1), labels = c("Female", "Male"))) %>% 
-  #mutate(age_start_group = case_when(
-   # age_start >= 28 & age_start <= 44 ~ "younger than 45",
-  #  age_start >= 45 & age_start <= 54 ~ "45-54 years old",
-   # age_start >= 55 & age_start <= 73 ~ "55+ years old",)) %>% 
-  #mutate(age_exit_group = case_when(
-   # age_exit >= 28 & age_exit <= 44 ~ "younger than 45",
-  #  age_exit >= 45 & age_exit <= 54 ~ "45-54 years old",
-   # age_exit >= 55 & age_exit <= 73 ~ "55+ years old",)) %>% 
-  #drop_na(Nationality) %>%
-   #mutate(language = case_when(
-    #Nationality %in% c("Schweiz", "Osterreich", "Deutschland", 
-     #                  "China / Deutschland", "Schweiz / Brazil") ~ "German",
-    #Nationality %in% c("Frankreich", "Belgien") ~ "French",
-    #Nationality %in% c("USA", "Grossbritannien", "Australien", "Irland", "Kanada", 
-     #                   "Singapur", "Philippinen / USA") ~ "English",
-   #TRUE ~ "Other" )) %>% 
-  #mutate(prior_code_label = case_when(
-   # prior_code == 0 ~ "Wechsel zu gleich grossem Unternehmen",
-    #prior_code == 1 ~ "Wechsel zu grosserem Unternehmen (Borsenwert)",
-    #prior_code == 2 ~ "Wechsel zu kleinerem Unternehmen (Borsenwert)",
-    #prior_code == 3 ~ "blieb im gleichen Unternehmen",)) %>% 
 mutate(tenure_group = case_when(
     tenure >= 1 & tenure <= 3 ~ "1-3 years",
     tenure >= 4 & tenure <= 6 ~ "4-6 years",
     tenure >= 7 & tenure <= 9 ~ "7-9 years",
     tenure >= 10 & tenure <= 12 ~ "10-12 years",
-    tenure >= 13 & tenure <= 27 ~ "13+ years",)) %>% 
-mutate(tenure_prior = as.numeric(tenure_prior)) %>% 
+    tenure >= 13 & tenure <= 27 ~ "13+ years",))
+
+# Calculate percentage distribution
+dfs1_percentage <- dfs1 %>%
+  group_by(Gender, prior_code_group, tenure_group) %>%
+  summarise(count = n()) %>%
+  group_by(Gender, prior_code_group) %>%
+  mutate(percentage = count / sum(count) * 100) %>%
+  ungroup()
+
+# Plot the data
+dfs1_percentage %>% 
+  mutate(tenure_group = factor(tenure_group, levels = c(
+    "1-3 years", "4-6 years", "7-9 years", "10-12 years", "13+ years"))) %>% 
+  ggplot(aes(x = factor(prior_code_group), y = percentage, fill = tenure_group)) +
+  geom_bar(stat = "identity", position = "stack") +
+  facet_wrap(~ Gender) +
+  labs(x = "Prior Wechsel Unternehmen", y = "Percentage", fill = "Tenure Group") +
+  ggtitle("Percentage Distribution of Tenure Group by Prior Wechsel Unternehmen and Gender (Sample1") +
+  theme_minimal() +
+  geom_text(aes(label = sprintf("%.1f%% (%d)", percentage, count)), 
+            position = position_stack(vjust = 0.5), size = 3)
+
+```
+
+
+```{r echo=FALSE}
+
+#Previous company and Gender
+
+df_previous <- df %>%
+  filter(Sample == 0 | Sample == 2) %>%
+  drop_na(prior_code) %>% 
+   mutate(prior_code_group = case_when(
+    prior_code == 0 | prior_code == 1 | prior_code == 2 ~ "changed company",
+    prior_code == 3 ~ "stayed in the same company")) %>% 
+  mutate(Gender = factor(Gender, levels = c(0, 1), labels = c("Female", "Male")))
+
+# Calculate percentages
+df_percentage <- df_previous %>%
+  group_by(prior_code_group, Gender) %>%
+  summarise(count = n()) %>%
+  mutate(percentage = count / sum(count) * 100)
+
+# Create the percentage bar plot with custom labels and percentages on the bars
+ggplot(df_percentage, aes(x = factor(prior_code_group), y = percentage, fill = Gender, label = paste0(round(percentage, 1), "% (", count, ")"))) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.9)) +
+  geom_text(position = position_dodge(width = 0.9), vjust = -0.5, size = 3) +
+  scale_fill_manual(values = c("Female" = "#FF6347", "Male" = "#4682B4")) + # Custom colors for Female and Male
+  labs(title = "Percentage of Gender by Prior Company Change", x = "Prior Company Change", y = "Percentage", fill = "Gender") +
+  theme_minimal()
+
+
+```
+
+
+
+
+
+```{r echo=FALSE}
+#stayed in the same company
+
+df_stayed <- df %>%
+  filter(Sample == 0 | Sample == 2) %>%  
+  drop_na(prior_code) %>%
+  mutate(prior_code_group = case_when(
+    prior_code == 0 | prior_code == 1 | prior_code == 2 ~ "changed company",
+    prior_code == 3 ~ "stayed in the same company")) %>% 
+  filter(prior_code_group == "stayed in the same company") %>% 
+  mutate(Gender = factor(Gender, levels = c(0, 1), labels = c("Female", "Male")))
+
+#table(df_stayed$Nationality_co)
+#table(df_stayed$Branche)
+#table(df_stayed$tenure_prior)
+#table(df_stayed$prior_position_code)
+
+
+# plotting Nationality_co by Gender with descriptive labels
+df_stayed_nationality <- df_stayed %>% 
+  drop_na(Nationality_co) %>% 
+  mutate(Nationality_co = factor(Nationality_co, 
+                                 levels = c(0, 1),
+                                 labels = c("Schweiz", "Foreign")))
+
+ggplot(df_stayed_nationality, aes(x = Nationality_co, fill = Gender)) +
+  geom_bar(position = "dodge") +
+  geom_text(stat = "count", aes(label = ..count..), 
+            position = position_dodge(width = 0.9), vjust = -0.5) +
+  labs(title = "Nationality Distribution by Gender (Stayed in the Same Company)",
+       x = "Nationality",
+       y = "Count") +
+  theme_minimal()
+
+
+# Plot for Branche by Gender
+df_stayed_branche <- df_stayed %>% 
+  drop_na(Branche)
+ggplot(df_stayed_branche, aes(x = factor(Branche), fill = Gender)) +
+  geom_bar(position = "dodge") +
+  geom_text(stat = "count", aes(label = ..count..), 
+            position = position_dodge(width = 0.9), vjust = -0.5) +
+  labs(title = "Industry Distribution by Gender (Stayed in the Same Company)",
+       x = "Industry (Branche)",
+       y = "Count") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# tenure prior + gender --> same company
+ df_stayed_tenure <- df_stayed %>%
+  mutate(tenure_prior = as.numeric(tenure_prior)) %>%  
+  mutate(tenure_prior = ifelse(tenure_prior == "", NA, tenure_prior)) %>%  
+  drop_na(tenure_prior) %>%
+  mutate(tenure_prior_group = factor(case_when(
+    tenure_prior >= 0 & tenure_prior <= 2 ~ "0-2 years",
+    tenure_prior >= 3 & tenure_prior <= 5 ~ "3-5 years",
+    tenure_prior >= 6 & tenure_prior <= 10 ~ "6-10 years",
+    tenure_prior >= 11 & tenure_prior <= 30 ~ "11+ years"),
+    levels = c("0-2 years", "3-5 years", "6-10 years", "11+ years")  
+  ))
+
+# Plot with custom colors and correct ordering
+ggplot(df_stayed_tenure, aes(x = tenure_prior_group, fill = Gender)) +
+  geom_bar(position = "dodge") +
+  geom_text(stat = "count", aes(label = ..count..), 
+            position = position_dodge(width = 0.9), vjust = -0.5) +
+  labs(title = "Tenure Prior Group Distribution by Gender (Stayed in the Same Company)",
+       x = "Tenure Prior Group",
+       y = "Count") +
+  theme_minimal()
+
+# Include Nationality Layer in Tenure Data
+df_stayed_tenure <- df_stayed %>%
+  mutate(tenure_prior = as.numeric(tenure_prior)) %>%  # Ensure tenure_prior is numeric
+  mutate(tenure_prior = ifelse(tenure_prior == "", NA, tenure_prior)) %>%  # Convert empty strings to NA
+  drop_na(tenure_prior) %>%
+  mutate(tenure_prior_group = factor(case_when(
+    tenure_prior >= 0 & tenure_prior <= 2 ~ "0-2 years",
+    tenure_prior >= 3 & tenure_prior <= 5 ~ "3-5 years",
+    tenure_prior >= 6 & tenure_prior <= 10 ~ "6-10 years",
+    tenure_prior >= 11 & tenure_prior <= 30 ~ "11+ years"),
+    levels = c("0-2 years", "3-5 years", "6-10 years", "11+ years")  # Specify the correct order of levels
+  )) %>%
+  drop_na(Nationality_co) %>% 
+  mutate(Nationality_co = factor(Nationality_co, levels = c(0, 1), labels = c("Schweiz", "Foreign")))  # Add Nationality as a factor
+
+# Plot with custom colors, correct ordering, and nationality layer
+ggplot(df_stayed_tenure, aes(x = tenure_prior_group, fill = Gender)) +
+  geom_bar(position = "dodge") +
+  geom_text(stat = "count", aes(label = ..count..), 
+            position = position_dodge(width = 0.9), vjust = -0.5) +
+  facet_wrap(~ Nationality_co) +  # Add facetting by nationality
+  labs(title = "Tenure Prior Group Distribution by Gender and Nationality (Stayed in the Same Company)",
+       x = "Tenure Prior Group",
+       y = "Count",
+       fill = "Gender") +
+  theme_minimal()
+
+
+# Plotting prior_position_code by Gender with descriptive labels
+df_stayed_position <- df_stayed %>% 
+  drop_na(prior_position_code) %>% 
+  mutate(prior_position_code = factor(prior_position_code, 
+                                      levels = c(0, 1, 2, 3),
+                                      labels = c("GL to GL", "GL to VR", 
+                                                 "More Responsibility", 
+                                                 "Less Responsibility")))
+
+ggplot(df_stayed_position, aes(x = prior_position_code, fill = Gender)) +
+  geom_bar(position = "dodge") +
+  geom_text(stat = "count", aes(label = ..count..), 
+            position = position_dodge(width = 0.9), vjust = -0.5) +
+  labs(title = "Prior Position Code Distribution by Gender (Stayed in the Same Company)",
+       x = "Prior Position Code",
+       y = "Count") +
+  theme_minimal()
+
+
+# Updated code for plotting prior_position_code by Gender with Nationality layer
+df_stayed_position <- df_stayed %>% 
+  drop_na(prior_position_code) %>% 
+  mutate(prior_position_code = factor(prior_position_code, 
+                                      levels = c(0, 1, 2, 3),
+                                      labels = c("GL to GL", "GL to VR", 
+                                                 "More  \nResponsibility", 
+                                                 "Less  \nResponsibility"))) %>%
+  drop_na(Nationality_co) %>% 
+  mutate(Nationality_co = factor(Nationality_co, levels = c(0, 1), labels = c("Schweiz", "Foreign")))  # Add Nationality as a factor
+
+ggplot(df_stayed_position, aes(x = prior_position_code, fill = Gender)) +
+  geom_bar(position = "dodge") +
+  geom_text(stat = "count", aes(label = ..count..), 
+            position = position_dodge(width = 0.9), vjust = -0.5) +
+  facet_wrap(~ Nationality_co) +  # Add facetting by nationality
+  labs(title = "Prior Position Code Distribution by Gender and Nationality (Stayed in the Same Company)",
+       x = "Prior Position Code",
+       y = "Count") +
+  theme_minimal()
+
+
+# Tenure and Gender
+df_stayed_tenure_now <- df_tenure %>% 
+  filter(Sample == 0 | Sample == 2) %>%
+  drop_na(prior_code, Gender, tenure) %>%  
+  mutate(prior_code_group = case_when(
+    prior_code == 0 | prior_code == 1 | prior_code == 2 ~ "changed company",
+    prior_code == 3 ~ "stayed in the same company")) %>%
+  filter(prior_code_group == "stayed in the same company") %>%
+  mutate(Gender = factor(Gender, levels = c(0, 1), labels = c("Female", "Male"))) %>% 
+  mutate(tenure_group = factor(case_when(
+    tenure >= 1 & tenure <= 3 ~ "1-3 years",
+    tenure >= 4 & tenure <= 6 ~ "4-6 years",
+    tenure >= 7 & tenure <= 9 ~ "7-9 years",
+    tenure >= 10 & tenure <= 12 ~ "10-12 years",
+    tenure >= 13 & tenure <= 27 ~ "13+ years"),
+    levels = c("1-3 years", "4-6 years", "7-9 years", "10-12 years", "13+ years")))  
+
+# Plot with custom colors and correct ordering
+ggplot(df_stayed_tenure_now, aes(x = tenure_group, fill = Gender)) +
+  geom_bar(position = "dodge") +
+  geom_text(stat = "count", aes(label = ..count..), 
+            position = position_dodge(width = 0.9), vjust = -0.5) +
+  labs(title = "Tenure by Gender (Stayed Company)",
+       x = "Tenure",
+       y = "Count") +
+  theme_minimal()
+
+
+# Tenure and Gender with Nationality layer
+df_stayed_tenure_now <- df_tenure %>% 
+  filter(Sample == 0 | Sample == 2) %>%
+  drop_na(prior_code, Gender, tenure) %>%  
+  mutate(prior_code_group = case_when(
+    prior_code == 0 | prior_code == 1 | prior_code == 2 ~ "changed company",
+    prior_code == 3 ~ "stayed in the same company")) %>%
+  filter(prior_code_group == "stayed in the same company") %>%
+  mutate(Gender = factor(Gender, levels = c(0, 1), labels = c("Female", "Male"))) %>% 
+  mutate(tenure_group = factor(case_when(
+    tenure >= 1 & tenure <= 3 ~ "1-3 years",
+    tenure >= 4 & tenure <= 6 ~ "4-6 years",
+    tenure >= 7 & tenure <= 9 ~ "7-9 years",
+    tenure >= 10 & tenure <= 12 ~ "10-12 years",
+    tenure >= 13 & tenure <= 27 ~ "13+ years"),
+    levels = c("1-3 years", "4-6 years", "7-9 years", "10-12 years", "13+ years"))) %>%
+  drop_na(Nationality_co) %>% 
+  mutate(Nationality_co = factor(Nationality_co, levels = c(0, 1), labels = c("Schweiz", "Foreign")))  # Add Nationality as a factor
+
+# Plot with custom colors, correct ordering, and nationality layer
+ggplot(df_stayed_tenure_now, aes(x = tenure_group, fill = Gender)) +
+  geom_bar(position = "dodge") +
+  geom_text(stat = "count", aes(label = ..count..), 
+            position = position_dodge(width = 0.9), vjust = -0.5) +
+  facet_wrap(~ Nationality_co) +  # Add facetting by nationality
+  labs(title = "Tenure by Gender and Nationality (Stayed Company)",
+       x = "Tenure Group",
+       y = "Count",
+       fill = "Gender") +
+  theme_minimal()
+
+
+```
+
+
+
+```{r echo=FALSE}
+#changed the company
+
+# Filter for individuals who changed companies
+df_changed <- df %>%
+  filter(Sample == 0 | Sample == 2) %>%
+  drop_na(prior_code) %>%
+  mutate(prior_code_group = case_when(
+    prior_code == 0 | prior_code == 1 | prior_code == 2 ~ "changed company",
+    prior_code == 3 ~ "stayed in the same company")) %>%
+  filter(prior_code_group == "changed company") %>%
+  mutate(Gender = factor(Gender, levels = c(0, 1), labels = c("Female", "Male")))
+
+#table(df_women_changed$Nationality_co)
+#table(df_women_changed$Branche)
+#table(df_women_changed$tenure_prior)
+#table(df_women_changed$prior_position_code)
+
+
+# Plot for Nationality_co by Gender with descriptive labels and custom colors
+df_changed_nationality <- df_changed %>% 
+  drop_na(Nationality_co) %>% 
+  mutate(Nationality_co = factor(Nationality_co, 
+                                 levels = c(0, 1),
+                                 labels = c("Schweiz", "Foreign")))
+
+ggplot(df_changed_nationality, aes(x = Nationality_co, fill = Gender)) +
+  geom_bar(position = "dodge") +
+  geom_text(stat = "count", aes(label = ..count..), 
+            position = position_dodge(width = 0.9), vjust = -0.5) +
+  labs(title = "Nationality Distribution by Gender (Changed Company)",
+       x = "Nationality",
+       y = "Count") +
+  scale_fill_manual(values = c("Female" = "darkred", "Male" = "darkblue")) +
+  theme_minimal()
+
+
+# Plot for Branche by Gender with custom colors
+df_changed_branche <- df_changed %>%
+  drop_na(Branche)
+
+ggplot(df_changed_branche, aes(x = factor(Branche), fill = Gender)) +
+  geom_bar(position = "dodge") +
+  geom_text(stat = "count", aes(label = ..count..), 
+            position = position_dodge(width = 0.9), vjust = -0.5) +
+  labs(title = "Industry Distribution by Gender (Changed Company)",
+       x = "Industry (Branche)",
+       y = "Count") +
+  scale_fill_manual(values = c("Female" = "darkred", "Male" = "darkblue")) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Ensure proper NA handling and ordering of tenure_prior_group
+df_changed_tenure <- df_changed %>%
+  mutate(tenure_prior = as.numeric(tenure_prior)) %>%  # Ensure tenure_prior is numeric
+  mutate(tenure_prior = ifelse(tenure_prior == "", NA, tenure_prior)) %>%  # Convert empty strings to NA
+  drop_na(tenure_prior) %>%
+  mutate(tenure_prior_group = factor(case_when(
+    tenure_prior >= 0 & tenure_prior <= 2 ~ "0-2 years",
+    tenure_prior >= 3 & tenure_prior <= 5 ~ "3-5 years",
+    tenure_prior >= 6 & tenure_prior <= 10 ~ "6-10 years",
+    tenure_prior >= 11 & tenure_prior <= 30 ~ "11+ years"),
+    levels = c("0-2 years", "3-5 years", "6-10 years", "11+ years")  # Specify the correct order of levels
+  ))
+
+# Plot with custom colors and correct ordering
+ggplot(df_changed_tenure, aes(x = tenure_prior_group, fill = Gender)) +
+  geom_bar(position = "dodge") +
+  geom_text(stat = "count", aes(label = ..count..), 
+            position = position_dodge(width = 0.9), vjust = -0.5) +
+  labs(title = "Tenure Prior Group Distribution by Gender (Changed Company)",
+       x = "Tenure Prior Group",
+       y = "Count") +
+  scale_fill_manual(values = c("Female" = "darkred", "Male" = "darkblue")) +
+  theme_minimal()
+
+
+
+# Plot for prior_position_code by Gender with custom colors
+df_changed_position <- df_changed %>%
+  drop_na(prior_position_code) %>%
+  mutate(prior_position_code = factor(prior_position_code,
+                                      levels = c(0, 1, 2, 3),
+                                      labels = c("GL to GL", "GL to VR", 
+                                                 "More Responsibility", 
+                                                 "Less Responsibility")))
+
+ggplot(df_changed_position, aes(x = prior_position_code, fill = Gender)) +
+  geom_bar(position = "dodge") +
+  geom_text(stat = "count", aes(label = ..count..), 
+            position = position_dodge(width = 0.9), vjust = -0.5) +
+  labs(title = "Prior Position Code Distribution by Gender (Changed Company)",
+       x = "Prior Position Code",
+       y = "Count") +
+  scale_fill_manual(values = c("Female" = "darkred", "Male" = "darkblue")) +
+  theme_minimal()
+
+
+# Plot for prior_position_code by Gender and Nationality with custom colors
+df_changed_position <- df_changed %>%
+  drop_na(prior_position_code) %>%
+  mutate(prior_position_code = factor(prior_position_code,
+                                      levels = c(0, 1, 2, 3),
+                                      labels = c("GL to GL", 
+                                                 "GL to VR", 
+                                                 "More \nResponsibility", 
+                                                 "Less \nResponsibility"))) %>%
+  mutate(Nationality_co = factor(Nationality_co, levels = c(0, 1), labels = c("Schweiz", "Foreign")))  # Add Nationality as a factor
+
+# Plot with custom colors, correct ordering, and nationality layer
+ggplot(df_changed_position, aes(x = prior_position_code, fill = Gender)) +
+  geom_bar(position = "dodge") +
+  geom_text(stat = "count", aes(label = ..count..), 
+            position = position_dodge(width = 0.9), vjust = -0.5) +
+  facet_wrap(~ Nationality_co) +  # Add facetting by nationality
+  labs(title = "Prior PositionDistribution by Gender and Nationality (Changed Company)",
+       x = "Prior Position",
+       y = "Count") +
+  scale_fill_manual(values = c("Female" = "darkred", "Male" = "darkblue")) +
+  theme_minimal()
+
+
+# Tenure and Gender
+df_changed_tenure_now <- df_tenure %>% 
+  filter(Sample == 0 | Sample == 2) %>%
+  drop_na(prior_code, Gender, tenure) %>%  
+  mutate(prior_code_group = case_when(
+    prior_code == 0 | prior_code == 1 | prior_code == 2 ~ "changed company",
+    prior_code == 3 ~ "stayed in the same company")) %>%
+  filter(prior_code_group == "changed company") %>%
+  mutate(Gender = factor(Gender, levels = c(0, 1), labels = c("Female", "Male"))) %>% 
+  mutate(tenure_group = factor(case_when(
+    tenure >= 1 & tenure <= 3 ~ "1-3 years",
+    tenure >= 4 & tenure <= 6 ~ "4-6 years",
+    tenure >= 7 & tenure <= 9 ~ "7-9 years",
+    tenure >= 10 & tenure <= 12 ~ "10-12 years",
+    tenure >= 13 & tenure <= 27 ~ "13+ years"),
+    levels = c("1-3 years", "4-6 years", "7-9 years", "10-12 years", "13+ years")))  
+
+# Plot with custom colors and correct ordering
+ggplot(df_changed_tenure_now, aes(x = tenure_group, fill = Gender)) +
+  geom_bar(position = "dodge") +
+  geom_text(stat = "count", aes(label = ..count..), 
+            position = position_dodge(width = 0.9), vjust = -0.5) +
+  labs(title = "Tenure by Gender (Changed Company)",
+       x = "Tenure",
+       y = "Count") +
+  scale_fill_manual(values = c("Female" = "darkred", "Male" = "darkblue")) +
+  theme_minimal()
+
+```
+
+
+```{r echo=FALSE}
+#prior position change and gender
+
+df_position <- df %>%
+  filter(Sample == 0 | Sample == 2) %>%
+  drop_na(prior_position_code) %>%
+  mutate(Gender = factor(Gender, levels = c(0, 1), labels = c("Female", "Male")),
+         prior_position_code = factor(prior_position_code, 
+                                      levels = c(0, 1, 2, 3), 
+                                      labels = c(`0` = "Wechsel von \nGL zu GL",
+                                                 `1` = "Wechsel von \nGL zu VR",
+                                                 `2` = "Wechsel zu Position\n mit mehr \nVerantwortung",
+                                                 `3` = "Wechsel zu Position\n mit weniger \nVerantwortung")))
+
+# Create a summary table for counts and percentages
+df_summary <- df_position %>%
+  group_by(Gender, prior_position_code) %>%
+  summarise(Count = n()) %>%
+  ungroup() %>%
+  group_by(Gender) %>%
+  mutate(Percentage = Count / sum(Count) * 100)
+# Create the bar plot
+ggplot(df_summary, aes(x = prior_position_code, y = Count, fill = Gender)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_text(aes(label = paste0(round(Percentage, 0), "% (", Count, ")")), 
+            position = position_dodge(width = 0.9), 
+            vjust = -0.2,
+            size = 3) +
+  scale_fill_manual(values = c("Female" = "#FF9999", "Male" = "#9999FF")) + # Custom colors
+  labs(title = "Prior Position Change by Gender",
+       x = "Prior Position Code",
+       y = "Count",
+       fill = "Gender") +
+  theme_minimal() 
+
+
+
+# Tenure and Gender with Nationality layer for Changed Company
+df_changed_tenure_now <- df_tenure %>% 
+  filter(Sample == 0 | Sample == 2) %>%
+  drop_na(prior_code, Gender, tenure) %>%  
+  mutate(prior_code_group = case_when(
+    prior_code == 0 | prior_code == 1 | prior_code == 2 ~ "changed company",
+    prior_code == 3 ~ "stayed in the same company")) %>%
+  filter(prior_code_group == "changed company") %>%
+  mutate(Gender = factor(Gender, levels = c(0, 1), labels = c("Female", "Male"))) %>% 
+  mutate(tenure_group = factor(case_when(
+    tenure >= 1 & tenure <= 3 ~ "1-3 years",
+    tenure >= 4 & tenure <= 6 ~ "4-6 years",
+    tenure >= 7 & tenure <= 9 ~ "7-9 years",
+    tenure >= 10 & tenure <= 12 ~ "10-12 years",
+    tenure >= 13 & tenure <= 27 ~ "13+ years"),
+    levels = c("1-3 years", "4-6 years", "7-9 years", "10-12 years", "13+ years"))) %>%
+  mutate(Nationality_co = factor(Nationality_co, levels = c(0, 1), labels = c("Schweiz", "Foreign")))  # Add Nationality as a factor
+
+# Plot with custom colors, correct ordering, and nationality layer
+ggplot(df_changed_tenure_now, aes(x = tenure_group, fill = Gender)) +
+  geom_bar(position = "dodge") +
+  geom_text(stat = "count", aes(label = ..count..), 
+            position = position_dodge(width = 0.9), vjust = -0.5) +
+  facet_wrap(~ Nationality_co) +  # Add facetting by nationality
+  labs(title = "Tenure by Gender and Nationality (Changed Company)",
+       x = "Tenure Group",
+       y = "Count",
+       fill = "Gender") +
+  scale_fill_manual(values = c("Female" = "darkred", "Male" = "darkblue")) +
+  theme_minimal()
+
+```
+
+
+```{r echo=FALSE}
+# Tenure in prior companies and Gender
+
+df_prior_tenure <- df %>%
+  filter(Sample == 0 | Sample == 2) %>%
+  drop_na(tenure_prior) %>%
+  mutate(tenure_prior = as.numeric(tenure_prior)) %>% 
 mutate(tenure_prior_group = case_when(
     tenure_prior >= 0 & tenure_prior <= 2 ~ "0-2 years",
     tenure_prior >= 3 & tenure_prior <= 5 ~ "3-5 years",
     tenure_prior >= 6 & tenure_prior <= 10 ~ "6-10 years",
     tenure_prior >=11 & tenure_prior <= 30 ~ "11+ years")) %>%
 mutate(tenure_prior_group = factor(tenure_prior_group, 
-                                   levels = c("0-2 years", "3-5 years", "6-10 years", "11+ years")))
-# Check the structure and summary of the transformed tenure_prior_group
-#str(dfs1$tenure_prior_group)
-#summary(dfs1$tenure_prior_group)
+                                   levels = c("0-2 years", "3-5 years", "6-10 years", "11+ years"))) %>% 
+  mutate(Gender = factor(Gender, levels = c(0, 1), labels = c("Female", "Male")))
 
-# Check the table of tenure_prior to see raw values
-#table(dfs1$tenure_prior)
+# Create a summary table for counts and percentages
+df_summary_tenure <- df_prior_tenure %>%
+  group_by(Gender, tenure_prior_group) %>%
+  summarise(Count = n()) %>%
+  ungroup() %>%
+  group_by(Gender) %>%
+  mutate(Percentage = Count / sum(Count) * 100)
 
-# Check the table of tenure_prior_group to see grouped values
-#table(dfs1$tenure_prior_group)
-#export(dfs1, "dataset.xlsx")
-```
-
-
-```{r echo=FALSE}
-dfs1 %>% mutate(tenure_group = factor(tenure_group, levels = c(
-  "1-3 years", "4-6 years", "7-9 years", "10-12 years", "13+ years"))) %>% 
-ggplot(aes(x = factor(prior_code), fill = tenure_group)) +
-  geom_bar(position = "dodge") +
-  scale_x_discrete(labels = c(
-    `0` = "Wechsel zu\ngleich grossem\nUnternehmen",
-    `1` = "Wechsel zu\ngrösserem Unternehmen\n(Börsenwert)",
-    `2` = "Wechsel zu\nkleinerem Unternehmen\n(Börsenwert)",
-    `3` = "blieb im\ngleichen Unternehmen"
-  )) +
-  labs(x = "Prior Wechsel Unternehmen", y = "Count", fill = "Tenure Group") +
-  ggtitle("Bar Plot of Tenure Group by Prior Wechsel Unternehmen") +
-  theme_minimal()+
-  geom_text(stat='count', aes(label=..count..), position=position_dodge(width=0.9), vjust=-0.5)
-
-#table(dfs1$prior_code_label)
-
-
-#Percentage plot
-dfs1 <- dfs1 %>%
-  mutate(tenure_group = factor(tenure_group, levels = c(
-    "1-3 years", "4-6 years", "7-9 years", "10-12 years", "13+ years")))
-
-# Create the percentage bar plot with renamed prior_code values in the plot
-ggplot(dfs1, aes(x = factor(prior_code), fill = tenure_group)) +
-  geom_bar(position = "fill") +
-  scale_x_discrete(labels = c(
-    `0` = "Wechsel zu\ngleich grossem\nUnternehmen",
-    `1` = "Wechsel zu\ngrösserem Unternehmen\n(Börsenwert)",
-    `2` = "Wechsel zu\nkleinerem Unternehmen\n(Börsenwert)",
-    `3` = "blieb im\ngleichen Unternehmen"
-  )) +
-  labs(x = "Prior Wechsel Unternehmen", y = "Percentage", fill = "Tenure Group") +
-  ggtitle("Percentage Bar Plot of Tenure Group by Prior Wechsel Unternehmen") +
-  theme_minimal() +
-  geom_text(aes(label=scales::percent(..count../tapply(..count..,..x..,sum)[..x..], accuracy = 1)), 
-            stat='count', position=position_fill(vjust=0.5))
-
-
-```
-
-```{r echo=FALSE}
-
-dfs1 %>% mutate(tenure_group = factor(tenure_group, levels = c(
-  "1-3 years", "4-6 years", "7-9 years", "10-12 years", "13+ years"))) %>% 
-ggplot(aes(x = factor(prior_code), fill = tenure_group)) +
-  geom_bar(position = "dodge") +
-  scale_x_discrete(labels = c(
-    `0` = "Wechsel zu\ngleich grössem\nUnternehmen",
-    `1` = "Wechsel zu\ngrosserem Unternehmen\n(Börsenwert)",
-    `2` = "Wechsel zu\nkleinerem Unternehmen\n(Börsenwert)",
-    `3` = "blieb im\ngleichen Unternehmen"
-  )) +
-  labs(x = "Prior Wechsel Unternehmen", y = "Count", fill = "Tenure Group") +
-  ggtitle("Bar Plot of Tenure Group by Prior Wechsel Unternehmen") +
-  theme_minimal()+
-  geom_text(stat='count', aes(label=..count..), position=position_dodge(width=0.9), vjust=-0.5)
-
-#table(dfs1$prior_code_label)
-
-
-#Percentage plot
-dfs1 %>% mutate(tenure_group = factor(tenure_group, levels = c(
-  "1-3 years", "4-6 years", "7-9 years", "10-12 years", "13+ years"))) %>% 
-
-# Create the percentage bar plot with renamed prior_code values in the plot
-ggplot(aes(x = factor(prior_code), fill = tenure_group)) +
-  geom_bar(position = "fill") +
-  scale_x_discrete(labels = c(
-    `0` = "Wechsel zu\ngleich grossem\nUnternehmen",
-    `1` = "Wechsel zu\ngrösserem Unternehmen\n(Börsenwert)",
-    `2` = "Wechsel zu\nkleinerem Unternehmen\n(Börsenwert)",
-    `3` = "blieb im\ngleichen Unternehmen"
-  )) +
-  labs(x = "Prior Wechsel Unternehmen", y = "Percentage", fill = "Tenure Group") +
-  ggtitle("Percentage Bar Plot of Tenure Group by Prior Wechsel Unternehmen") +
-  theme_minimal() +
-  geom_text(aes(label=scales::percent(..count../tapply(..count..,..x..,sum)[..x..], accuracy = 1)), 
-            stat='count', position=position_fill(vjust=0.5))
-
-```
-
-```{r echo=FALSE}
-
-ggplot(data=dfs1, aes(x = factor(prior_code), fill = Gender)) +
-  geom_bar(position = "dodge") +
-  scale_x_discrete(labels = c(
-    `0` = "Wechsel zu\ngleich grossem\nUnternehmen",
-    `1` = "Wechsel zu\ngrösserem Unternehmen\n(Börsenwert)",
-    `2` = "Wechsel zu\nkleinerem Unternehmen\n(Börsenwert)",
-    `3` = "blieb im\ngleichen Unternehmen"
-  )) +
-  labs(x = "Prior Wechsel Unternehmen", y = "Count", fill = "Gender") +
-  ggtitle("Bar Plot of Prior Wechsel Unternehmen by Gender") +
-  theme_minimal()+
-  geom_text(stat='count', aes(label=..count..), position=position_dodge(width=0.9), vjust=-0.5)
-
-
-
-#Percentage plot
-# Create the percentage bar plot with renamed prior_code values in the plot
-ggplot(dfs1, aes(x = factor(prior_code), fill = Gender)) +
-  geom_bar(position = "fill") +
-  scale_x_discrete(labels = c(
-    `0` = "Wechsel zu\ngleich grossem\nUnternehmen",
-    `1` = "Wechsel zu\ngrösserem Unternehmen\n(Börsenwert)",
-    `2` = "Wechsel zu\nkleinerem Unternehmen\n(Börsenwert)",
-    `3` = "blieb im\ngleichen Unternehmen"
-  )) +
-  labs(x = "Prior Code", y = "Percentage", fill = "Gender") +
-  ggtitle("Percentage Bar Plot of Prior Wechsel Unternehmen by Gender") +
-  theme_minimal() +
-  geom_text(aes(label=scales::percent(..count../tapply(..count..,..x..,sum)[..x..], accuracy = 1)), 
-            stat='count', position=position_fill(vjust=0.5))
-
-
-
-
-### combination of absolute numbers and percentage
-
-# Combine dataset with absolute numbers and percentages
-dfs1_combined <- dfs1 %>%
-  group_by(prior_code, Gender) %>%
-  summarise(count = n()) %>%
-  ungroup()
-
-# Calculate percentages
-total_counts <- dfs1_combined %>%
-  group_by(prior_code) %>%
-  summarise(total = sum(count))
-
-dfs1_combined <- dfs1_combined %>%
-  left_join(total_counts, by = "prior_code") %>%
-  mutate(percentage = (count / total) * 100)
-
-# Plot
-ggplot(dfs1_combined, aes(x = factor(prior_code), y = count, fill = Gender)) +
+# Create the bar plot with custom colors
+ggplot(df_summary_tenure, aes(x = tenure_prior_group, y = Count, fill = Gender)) +
   geom_bar(stat = "identity", position = "dodge") +
-  geom_text(aes(label = paste0(round(percentage, 1), "%")), 
+  geom_text(aes(label = paste0(round(Percentage, 0), "% (", Count, ")")), 
             position = position_dodge(width = 0.9), 
-            vjust = -0.5) +
-  scale_x_discrete(labels = c(
-    `0` = "Wechsel zu\ngleich grossem\nUnternehmen",
-    `1` = "Wechsel zu\ngrösserem Unternehmen\n(Börsenwert)",
-    `2` = "Wechsel zu\nkleinerem Unternehmen\n(Börsenwert)",
-    `3` = "blieb im\ngleichen Unternehmen"
-  )) +
-  labs(title = "Gender Distribution by Prior Wechsel Unternehmen", 
-       x = "Prior Wechsel Unternehmen", 
-       y = "Count", 
+            vjust = -0.2,
+            size = 3) +
+  scale_fill_manual(values = c("Female" = "#E69F00", "Male" = "#56B4E9")) + # Custom colors
+  labs(title = "Tenure Prior by Gender",
+       x = "Tenure Prior Group",
+       y = "Count",
        fill = "Gender") +
   theme_minimal()
-
-
-
-
-
 ```
 
-
 ```{r echo=FALSE}
-dfs1_complete <- dfs1 %>%
-  complete(tenure_prior_group, Gender, fill = list(n = 0))
+# Aufstieg und Abstieg
 
-# Generate the bar plot for tenure_prior_group and Gender
-gender_tenure_plot <- ggplot(dfs1_complete, aes(x = tenure_prior_group, fill = Gender)) +
-  geom_bar(position = "dodge") +
-  labs(x = "Tenure Prior Group", y = "Count", fill = "Gender") +
-  ggtitle("Bar Plot of Gender by Tenure Prior Group") +
-  theme_minimal() +
-  scale_fill_manual(values = c("Female" = "#FF69B4", "Male" = "#1E90FF")) +
-  geom_text(stat = 'count', aes(label = ..count..), position = position_dodge(width = 0.9), vjust = -0.5)
-
-# Print the plot
-print(gender_tenure_plot)
+df_status <- df %>% 
+    filter(Sample == 0 | Sample == 2) %>%
+  drop_na(prior_status) %>% 
+  mutate(p_status = case_when( 
+    prior_status == "nicht vergleichbar (von VR zu GL)" | 
+      prior_status == "Nicht Vergleichbar (VR)" ~ "Nicht Vergleichbar",
+    TRUE ~ prior_status)) %>% 
+  mutate(Gender = factor(Gender, levels = c(0, 1), labels = c("Female", "Male")))
+  
 
 
-# Ensure that all combinations of tenure_prior_group and Gender are included
-dfs1_complete <- dfs1 %>%
-  complete(tenure_prior_group, Gender, fill = list(n = 0))
+# Prior Status Change
+df_status <- df %>% 
+  filter(Sample == 0 | Sample == 2) %>%
+  drop_na(prior_status) %>% 
+  mutate(p_status = case_when( 
+    prior_status == "nicht vergleichbar (von VR zu GL)" | 
+      prior_status == "Nicht Vergleichbar (VR)" ~ "Nicht Vergleichbar",
+    TRUE ~ prior_status)) %>%
+  mutate(Gender = factor(Gender, levels = c(0, 1), labels = c("Female", "Male")))
 
-# Combine dataset with absolute numbers and percentages
-dfs1_combined <- dfs1_complete %>%
-  group_by(tenure_prior_group, Gender) %>%
+# Count and percentage calculation
+df_summary <- df_status %>%
+  group_by(Gender, p_status) %>%
   summarise(count = n()) %>%
-  ungroup()
+  ungroup() %>%
+  mutate(percentage = count / sum(count) * 100)
 
-# Calculate percentages
-total_counts <- dfs1_combined %>%
-  group_by(tenure_prior_group) %>%
-  summarise(total = sum(count))
-
-dfs1_combined <- dfs1_combined %>%
-  left_join(total_counts, by = "tenure_prior_group") %>%
-  mutate(percentage = (count / total) * 100)
-
-# Plot
-ggplot(dfs1_combined, aes(x = tenure_prior_group, y = count, fill = Gender)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  geom_text(aes(label = paste0(round(percentage, 1), "%")), 
+# Plot with dodge position and both count and percentage labels
+ggplot(df_summary, aes(x = Gender, y = count, fill = p_status)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.9)) +
+  geom_text(aes(label = paste0(count, " (", round(percentage, 1), "%)")), 
             position = position_dodge(width = 0.9), 
-            vjust = -0.5) +
-  labs(title = "Gender Distribution by Tenure Prior Group", 
-       x = "Tenure Prior Group", 
-       y = "Count", 
-       fill = "Gender") +
+            vjust = -0.5, 
+            size = 3) +
+  labs(title = "Bar Plot for Gender and Prior Status Change", x = "Gender", y = "Count") +
   theme_minimal() +
-  scale_fill_manual(values = c("Female" = "#FF69B4", "Male" = "#1E90FF"))
+  scale_fill_brewer(palette = "Set1")
 
+  
 ```
-
-
-### Regression Analysis
-
-#### Model1 - Prior Wechsel Unternehmen:
 
 ```{r echo=FALSE}
-# Regression Analysis -----------------------------------------------------
+# Schilling - Aufstieg und Abstieg
 
-#Age at start and tenure
-dfs1$prior_code <- relevel(as.factor(dfs1$prior_code), ref = "0")
+#table(df$schilling_status)
+#table(df$prior_status)
+df_schilling_status <- df %>% 
+    filter(Sample == 0 | Sample == 2) %>%
+    drop_na(schilling_status) %>% 
+    mutate(s_status = case_when( 
+        schilling_status == "Nichr Vergleichbar" | 
+        schilling_status == "Nicht Aufstieg" | 
+        schilling_status == "(Früh)Pension" ~ "Nicht Vergleichbar",
+        schilling_status == "Aufsteigend" ~ "Aufstieg",
+        TRUE ~ schilling_status)) %>% 
+    mutate(Gender = factor(Gender, levels = c(0, 1), labels = c("Female", "Male")))
 
-# Fit the model
-model1 <- lm(tenure ~ prior_code, data = dfs1)
-summary(model1)
+  
 
-# Plot the points
-#plot(dfs1$prior_code, dfs1$tenure, xlab = "Age Start Group", ylab = "Tenure")
 
-# Add mean lines for each group
-#levels <- levels(dfs1$age_start_group)
-#means <- tapply(dfs1$tenure, dfs1$age_start_group, mean)
+# Count and percentage calculation
+df_summary <- df_schilling_status %>%
+  group_by(Gender, s_status) %>%
+  summarise(count = n()) %>%
+  ungroup() %>%
+  mutate(percentage = count / sum(count) * 100)
 
-#for (i in seq_along(levels)) {
- # segments(i - 0.5, means[levels[i]], i + 0.5, means[levels[i]], col = "blue", lwd = 2)}
+# Plot with dodge position and both count and percentage labels
+ggplot(df_summary, aes(x = Gender, y = count, fill = s_status)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.9)) +
+  geom_text(aes(label = paste0(count, " (", round(percentage, 1), "%)")), 
+            position = position_dodge(width = 0.9), 
+            vjust = -0.5, 
+            size = 3) +
+  labs(title = "Bar Plot for Gender and Schilling Status Change", x = "Gender", y = "Count") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Set1")
+
+  
 ```
 
-The model explains about 1.53% of the variance in tenure (R-squared = 0.01526). The adjusted R-squared (-0.008187) suggests that after adjusting for the number of predictors, the model does not explain any variability in tenure and instead indicates that the predictors do not contribute meaningfully to the model. The F-statistic (0.6508) and its associated p-value (0.5839) indicate that the overall model is not statistically significant.
-
-Intercept:
-When an individual changes to a company of the same size (reference category, prior_code = 0), the predicted tenure is 4.50 years. This coefficient is significant at the 5% level (p = 0.0173).
-
-Prior Company Change:  
-
-- **Changing to a larger company (prior_code = 1)** is associated with an increase in tenure by approximately 1.97 years. This coefficient is not significant (p = 0.3162).  
-
-- **Changing to a smaller company (prior_code = 2)** is associated with an increase in tenure by approximately 0.95 years. This coefficient is not significant (p = 0.6346).  
-
-- **Staying in the same company (prior_code = 3)** is associated with an increase in tenure by approximately 1.26 years. This coefficient is not significant (p = 0.5137).  
 
 
-**Summary:**
-The type of company change (coded as prior_code) does not significantly influence tenure. None of the categories (change to a larger company, change to a smaller company, or stay in the same company) are associated with statistically significant changes in tenure. This model is not statistically significant and it does not provide a meaningful explanation for the data. Additionally, the model explains a negligible proportion of the variance in tenure. The residual standard error of 3.731 on 126 degrees of freedom shows that there is considerable unexplained variability in tenure that the model does not capture.
-
-
-#### Model2 - Prior Position:
 
 ```{r echo=FALSE}
-# Regression Analysis -----------------------------------------------------
+# Status change from previous position and Gender
+# Data Preparation
+df_anova <- df_tenure %>%
+  filter(Sample == 0 | Sample == 2) %>%  # Select Sample 1
+  drop_na(tenure, Gender, prior_code) %>%  # Ensure no missing values
+  mutate(Gender = factor(Gender, levels = c(0, 1), labels = c("Female", "Male")),
+         prior_code_group = factor(ifelse(prior_code == 3, "Stayed", "Changed")))  # Categorize prior_code
 
-#Age at start and tenure
-dfs1$prior_position_code <- relevel(as.factor(dfs1$prior_position_code), ref = "0")
+# Perform ANOVA
+anova_result <- aov(tenure ~ Gender * prior_code_group, data = df_anova)
 
-# Fit the model
-model2 <- lm(tenure ~ prior_position_code, data = dfs1)
-summary(model2)
+# Summary of ANOVA
+summary(anova_result)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ```
 
+```{r echo=FALSE}
+# T-Test Analysis
+# Testing the difference in tenure between men and women based on prior company change status
+
+# Preparing the data for the t-test
+df_ttest <- df_tenure %>%
+  filter(Sample == 0 | Sample == 2) %>%  # Select Sample 1
+  drop_na(tenure, Gender, prior_code) %>%  # Remove missing values
+  mutate(Gender = factor(Gender, levels = c(0, 1), labels = c("Female", "Male")))  # Convert Gender to factor
+
+# Conducting an independent two-sample t-test to compare the mean tenure of males and females
+t_test_result <- t.test(tenure ~ Gender, data = df_ttest)
+
+# Displaying the t-test results
+t_test_result
+
+# Summarizing the test results
+tidy(t_test_result)
 
 
-The model explains about 2.80% of the variance in tenure (R-squared = 0.02797). The adjusted R-squared (0.004825) suggests that after adjusting for the number of predictors, the model does not explain much variability in tenure and indicates that the predictors do not contribute meaningfully to the model. The F-statistic (1.208) and its associated p-value (0.3095) indicate that the overall model is not statistically significant.
-
-Intercept:
-When an individual remains in the same position (reference category, prior_position_code = 0), the predicted tenure is 5.4595 years. This coefficient is highly significant (p < 0.001).
-
-Prior Position Change:  
-
-- **Moving to a higher position (prior_position_code = 1)** is associated with an increase in tenure by approximately 4.2072 years. This coefficient is marginally significant (p = 0.061).  
-
-- **Moving to a lower position (prior_position_code = 2)** is associated with an increase in tenure by approximately 0.4101 years. This coefficient is not significant (p = 0.588).  
-
-- **Changing to a different position (prior_position_code = 3)** is associated with an increase in tenure by approximately 0.5405 years. This coefficient is not significant (p = 0.595).  
-
-
-**Summary:**  
-
-The type of position change (coded as prior_position_code) does not significantly influence tenure. None of the categories (moving to a higher position, moving to a lower position, or changing to a different position) are associated with statistically significant changes in tenure. This model is not statistically significant and it does not provide a meaningful explanation for the data. Additionally, the model explains a negligible proportion of the variance in tenure. The residual standard error of 3.707 on 126 degrees of freedom shows that there is considerable unexplained variability in tenure that the model does not capture.
+```
