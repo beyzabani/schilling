@@ -42,7 +42,7 @@ o Prior and subsequent positions of men and women
 # cleaning ----------------------------------------------------------------
 
 df <- df[-1, ]%>% 
-  select(Austrittsjahr, Jahrgang, Gender, Sample, Stellenantritt, Nationality, Nationality_co, Branche, PriorPosition,	PriorWechselUnternehmen,	prior_code, tenure_prior, prior_position_code, prior_status, schilling_status, highest_degree, ausbildungsort, field_of_study) %>%
+  select(Austrittsjahr, Jahrgang, Gender, Sample, Stellenantritt, Nationality, Nationality_co, Branche, PriorPosition,	PriorWechselUnternehmen,	prior_code, tenure_prior, prior_position_code, prior_status, schilling_status, highest_degree, ausbildungsort, fieldofstudy) %>%
   mutate_all(as.character) %>%
   mutate_all(~ recode(., "NA" = NA_character_, "N/A" = NA_character_))
 
@@ -56,6 +56,7 @@ df_age <- df %>%
 df_tenure <- df %>% 
   drop_na(Stellenantritt) %>% 
   mutate(tenure = as.numeric(Austrittsjahr) - as.numeric(Stellenantritt))
+
 
 #table(df$prior_code)
 #table(df$prior_status)
@@ -794,121 +795,113 @@ ggplot(df_summary, aes(x = Gender, y = count, fill = highest_degree)) +
 ```
 
 ```{r echo=FALSE}
-# Filter and mutate data
-df_degree <- df %>% 
+# Highest degree, Gender, and Nationality
+
+df_degree_n <- df %>% 
    filter(Sample == 0 | Sample == 1) %>%
-   drop_na(highest_degree, Nationality_co) %>%  # Dropping rows with NA in highest_degree or Nationality_co
+   drop_na(highest_degree, Nationality_co) %>% 
    mutate(Gender = factor(Gender, levels = c(0, 1), labels = c("Female", "Male")),
           highest_degree = factor(highest_degree, levels = c(1, 2, 3, 4), 
                                   labels = c("Bachelor's degree", "Master's degree/MBA", "PhD", "Other")),
           Nationality_co = factor(Nationality_co, levels = c(0, 1), labels = c("Schweiz", "Foreign")))
 
 # Count and percentage calculation
-df_summary <- df_degree %>%
+df_summary <- df_degree_n %>%
   group_by(Gender, Nationality_co, highest_degree) %>%
   summarise(count = n()) %>%
   ungroup() %>%
   group_by(Gender, Nationality_co) %>%
   mutate(percentage = count / sum(count) * 100)
 
-# Plot with dodge position and both count and percentage labels, with Nationality_co as a facet layer
+# Plot with dodge position and both count and percentage labels
 ggplot(df_summary, aes(x = Gender, y = count, fill = highest_degree)) +
   geom_bar(stat = "identity", position = position_dodge(width = 0.9)) +
   geom_text(aes(label = paste0(count, " (", round(percentage, 1), "%)")), 
             position = position_dodge(width = 0.9), 
             vjust = -0.5, 
             size = 3) +
-  labs(title = "Bar Plot for Gender, Nationality, and Highest Degree", x = "Gender", y = "Count") +
+  labs(title = "Bar Plot for Gender, Nationality, and Highest Degree", 
+       x = "Gender", y = "Count") +
   theme_minimal() +
   scale_fill_brewer(palette = "Set1") +
+  facet_wrap(~ Nationality_co)
+```
+
+
+```{r echo=FALSE}
+#Field of study and Gender
+
+df_field <- df %>% 
+   filter(Sample == 0 | Sample == 1) %>%
+   drop_na(fieldofstudy) %>% 
+  mutate(field = case_when(
+    fieldofstudy %in% c(0, 1, 2, 3, 4, 5) ~ "Economics and Management",
+    fieldofstudy %in% c(6, 7, 8) ~ "STEM",
+    fieldofstudy %in% c(9, 10, 11, 12) ~ "Other",
+    TRUE ~ NA_character_
+  )) %>% 
+   mutate(Gender = factor(Gender, levels = c(0, 1), labels = c("Female", "Male")))
+
+# Count and percentage calculation
+df_summary <- df_field %>%
+  group_by(Gender, field) %>%
+  summarise(count = n()) %>%
+  ungroup() %>%
+  group_by(Gender) %>%
+  mutate(percentage = count / sum(count) * 100)
+
+# Plot with dodge position and both count and percentage labels
+ggplot(df_summary, aes(x = Gender, y = count, fill = field)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.9)) +
+  geom_text(aes(label = paste0(count, " (", round(percentage, 1), "%)")), 
+            position = position_dodge(width = 0.9), 
+            vjust = -0.5, 
+            size = 3) +
+  labs(title = "Bar Plot for Gender and Field of Study", x = "Gender", y = "Count") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Set3")
+```
+
+
+```{r echo=FALSE}
+
+# Field of study and nationality
+df_field_n <- df %>%
+  filter(Sample == 0 | Sample == 1) %>%
+  drop_na(fieldofstudy, Nationality_co) %>%
+  mutate(field = case_when(
+    fieldofstudy %in% c(0, 1, 2, 3, 4, 5) ~ "Economics and Management",
+    fieldofstudy %in% c(6, 7, 8) ~ "STEM",
+    fieldofstudy %in% c(9, 10, 11, 12) ~ "Other",
+    TRUE ~ NA_character_
+  )) %>%
+  mutate(Gender = factor(Gender, levels = c(0, 1), labels = c("Female", "Male")),
+         Nationality_co = factor(Nationality_co, levels = c(0, 1), labels = c("Schweiz", "Foreign")))
+
+# Count and percentage calculation
+df_summary <- df_field_n %>%
+  group_by(Gender, Nationality_co, field) %>%
+  summarise(count = n()) %>%
+  ungroup() %>%
+  group_by(Gender, Nationality_co) %>%
+  mutate(percentage = count / sum(count) * 100)
+
+
+# Plot with dodge position and both count and percentage labels
+ggplot(df_summary, aes(x = Gender, y = count, fill = field)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.9)) +
+  geom_text(aes(label = paste0(count, " (", round(percentage, 1), "%)")), 
+            position = position_dodge(width = 0.9), 
+            vjust = -0.5, 
+            size = 3) +
+  labs(title = "Bar Plot for Gender, Nationality, and Field of Study", 
+       x = "Gender", y = "Count") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Set3") +
   facet_wrap(~ Nationality_co)
 
 ```
 
-```{r echo=FALSE}
-# Age Start
-df_age <- df %>% 
-  filter(Sample == 0 | Sample == 1) %>%
-  drop_na(Jahrgang, Stellenantritt, prior_code) %>%
-  mutate(prior_code_group = case_when(
-    prior_code == 0 | prior_code == 1 | prior_code == 2 ~ "changed company",
-    prior_code == 3 ~ "stayed in the same company",
-    TRUE ~ NA_character_)) %>%  # Ensure all possible values are covered
-  mutate(age_start = as.numeric(Stellenantritt) - as.numeric(Jahrgang)) %>% 
-  mutate(Gender = factor(Gender, levels = c(0, 1), labels = c("Female", "Male"))) %>% 
-  mutate(age_start_group = case_when(
-    age_start >= 28 & age_start <= 44 ~ "younger than 45",
-    age_start >= 45 & age_start <= 54 ~ "45-54 years old",
-    age_start >= 55 & age_start <= 73 ~ "55+ years old",
-    TRUE ~ NA_character_)) %>%  # Ensure all possible values are covered
-  mutate(age_start_group = factor(age_start_group, 
-                                  levels = c("younger than 45", "45-54 years old", "55+ years old")))
-
-# Plot age_start_group with prior_code_group and Gender
-df_age_summary <- df_age %>%
-  drop_na(prior_code_group, age_start_group) %>%  # Ensure no NA values disrupt the grouping
-  group_by(Gender, prior_code_group, age_start_group) %>%
-  summarise(count = n()) %>%
-  ungroup() %>%
-  group_by(Gender, prior_code_group) %>%
-  mutate(percentage = count / sum(count) * 100)
-
-# Plot with dodge position and both count and percentage labels
-ggplot(df_age_summary, aes(x = Gender, y = count, fill = age_start_group)) +
-  geom_bar(stat = "identity", position = position_dodge(width = 0.9)) +
-  geom_text(aes(label = paste0(count, " (", round(percentage, 1), "%)")), 
-            position = position_dodge(width = 0.9), 
-            vjust = -0.5, 
-            size = 3) +
-  labs(title = "Bar Plot for Gender, Prior Code Group, and Age Start Group", 
-       x = "Gender", y = "Count") +
-  theme_minimal() +
-  scale_fill_brewer(palette = "Set1") +
-  facet_wrap(~ prior_code_group)
-
-```
-
-```{r echo=FALSE}
-#Age Exit
-df_age_exit <- df %>% 
-  filter(Sample== 0 | Sample==1) %>%
-    drop_na(Jahrgang, prior_code) %>%
-  mutate(prior_code_group = case_when(
-    prior_code == 0 | prior_code == 1 | prior_code == 2 ~ "changed company",
-    prior_code == 3 ~ "stayed in the same company")) %>% 
-  mutate(age_exit = as.numeric(Austrittsjahr) - as.numeric(Jahrgang)) %>% 
-  mutate(Gender = factor(Gender, levels = c(0, 1), labels = c("Female", "Male"))) %>% 
-  mutate(age_exit_group = case_when(
-    age_exit >= 28 & age_exit <= 44 ~ "younger than 45",
-    age_exit >= 45 & age_exit <= 54 ~ "45-54 years old",
-    age_exit >= 55 & age_exit <= 73 ~ "55+ years old",)) %>% 
-  mutate(age_exit_group = factor(age_exit_group, 
-                                  levels = c("younger than 45", "45-54 years old", "55+ years old")))
-
-
-
-# Plot age_exit_group with prior_code_group and Gender
-df_age_summary <- df_age_exit %>%
-  group_by(Gender, prior_code_group, age_exit_group) %>%
-  summarise(count = n()) %>%
-  ungroup() %>%
-  group_by(Gender, prior_code_group) %>%
-  mutate(percentage = count / sum(count) * 100)
-
-# Plot with dodge position and both count and percentage labels
-ggplot(df_age_summary, aes(x = Gender, y = count, fill = age_exit_group)) +
-  geom_bar(stat = "identity", position = position_dodge(width = 0.9)) +
-  geom_text(aes(label = paste0(count, " (", round(percentage, 1), "%)")), 
-            position = position_dodge(width = 0.9), 
-            vjust = -0.5, 
-            size = 3) +
-  labs(title = "Bar Plot for Gender, Prior Code Group, and Age Exit Group", 
-       x = "Gender", y = "Count") +
-  theme_minimal() +
-  scale_fill_brewer(palette = "Set1") +
-  facet_wrap(~ prior_code_group)
-
-```
 
 
 ```{r echo=FALSE}
